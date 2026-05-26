@@ -120,6 +120,26 @@ class ProductRepository(BaseRepository):
         except Exception as exc:  # pragma: no cover - dependencia externa
             raise ProductRepositoryError(self._normalize_error(exc)) from exc
 
+    def update_stock(self, product_id: UUID, new_stock: int) -> Product:
+        """Actualiza el stock de un producto y devuelve el registro persistido."""
+
+        try:
+            response = (
+                self.client.table(self.table_name)
+                .update({"stock": new_stock, "updated_at": datetime.now(UTC).isoformat()})
+                .select("*")
+                .eq("id", str(product_id))
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise ProductNotFoundError(f"Producto {product_id} no encontrado")
+            return self._to_product(rows[0])
+        except ProductNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise ProductRepositoryError(self._normalize_error(exc)) from exc
+
     def _to_product(self, row: Mapping[str, object]) -> Product:
         """Convierte una fila de Supabase en un producto de dominio."""
 

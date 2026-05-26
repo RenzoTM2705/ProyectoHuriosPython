@@ -62,6 +62,9 @@ uvicorn app.main:app --reload
 - `POST /products` crea un producto nuevo.
 - `PUT /products/{id}` actualiza un producto completo.
 - `DELETE /products/{id}` elimina un producto.
+- `POST /orders` crea un pedido y calcula el total automáticamente.
+- `GET /orders` lista pedidos con sus detalles.
+- `GET /orders/{id}` consulta un pedido por identificador.
 
 ### Notas de arquitectura
 
@@ -95,6 +98,32 @@ uvicorn app.main:app --reload
 - `app/repositories/product_repository.py` consulta la tabla `products` en Supabase PostgreSQL.
 - `app/models/product.py` define la entidad de dominio del producto.
 - `app/schemas/product.py` valida precio positivo, stock válido y campos requeridos.
+
+### Pedidos
+
+- `app/routers/orders_router.py` expone el flujo público de pedidos.
+- `app/services/order_service.py` valida stock, calcula totales y maneja compensación de fallos.
+- `app/repositories/order_repository.py` persiste pedidos y detalles en Supabase PostgreSQL.
+- `app/models/order.py` define las entidades `Order` y `OrderDetail`.
+- `app/schemas/order.py` valida usuario, productos, cantidades y estructura de respuesta.
+
+### Tabla esperada en Supabase
+
+El módulo asume tablas `orders` y `order_details` con columnas similares a:
+
+- `orders.id` UUID
+- `orders.user_id` UUID
+- `orders.total` numeric
+- `orders.status` text
+- `orders.created_at` timestamptz
+- `orders.updated_at` timestamptz
+- `order_details.id` UUID
+- `order_details.order_id` UUID
+- `order_details.product_id` UUID
+- `order_details.product_name` text
+- `order_details.quantity` integer
+- `order_details.unit_price` numeric
+- `order_details.subtotal` numeric
 
 ### Tabla esperada en Supabase
 
