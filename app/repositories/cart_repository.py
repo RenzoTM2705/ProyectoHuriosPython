@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from app.config.supabase import get_supabase_client
 from app.models.cart import Cart, CartItem
 from app.repositories.base_repository import BaseRepository
 
@@ -25,9 +23,6 @@ class CartRepository(BaseRepository):
 
     carts_table = "carts"
     items_table = "cart_items"
-
-    def __init__(self, client=None) -> None:
-        self.client = client or get_supabase_client()
 
     def get_or_create_cart(self, user_id: UUID) -> Cart:
         """Devuelve el carrito del usuario o lo crea si no existe."""
@@ -222,33 +217,7 @@ class CartRepository(BaseRepository):
             subtotal=Decimal(str(row.get("subtotal", "0"))),
         )
 
-    def _extract_rows(self, response) -> list[Mapping[str, object]]:
-        """Extrae filas desde la respuesta del SDK de Supabase."""
-
-        data = getattr(response, "data", None)
-        if data is None:
-            return []
-        if isinstance(data, list):
-            return [row for row in data if isinstance(row, Mapping)]
-        if isinstance(data, Mapping):
-            return [data]
-        return []
-
-    def _parse_datetime(self, value) -> datetime | None:
-        """Convierte timestamps ISO a datetime."""
-
-        if value in (None, ""):
-            return None
-        if isinstance(value, datetime):
-            return value
-        text = str(value).replace("Z", "+00:00")
-        try:
-            return datetime.fromisoformat(text)
-        except ValueError:
-            return None
-
     def _normalize_error(self, exc: Exception) -> str:
         """Genera un mensaje seguro y legible para la capa de servicio."""
 
-        message = str(exc).strip()
-        return message or "Error inesperado en el repositorio del carrito"
+        return super()._normalize_error(exc, "Error inesperado en el repositorio del carrito")

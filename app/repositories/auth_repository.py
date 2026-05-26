@@ -6,9 +6,6 @@ para la capa de servicio. No decide qué error HTTP devolver.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
-from app.config.supabase import get_supabase_client
 from app.models.auth import AuthSessionData, AuthUser
 from app.repositories.base_repository import BaseRepository
 
@@ -19,9 +16,6 @@ class AuthRepositoryError(Exception):
 
 class AuthRepository(BaseRepository):
     """Acceso a Supabase Auth para registro e inicio de sesión."""
-
-    def __init__(self, client=None) -> None:
-        self.client = client or get_supabase_client()
 
     def register(self, email: str, password: str) -> AuthSessionData:
         """Registra un usuario en Supabase Auth."""
@@ -67,34 +61,7 @@ class AuthRepository(BaseRepository):
             expires_in=session_payload.get("expires_in") if session_payload else None,
         )
 
-    def _extract_payload(self, value, fallback_key: str) -> dict[str, object]:
-        """Normaliza objetos o diccionarios devueltos por el SDK de Supabase."""
-
-        if value is None:
-            return {}
-
-        if hasattr(value, "model_dump"):
-            payload = value.model_dump()
-            return payload if isinstance(payload, dict) else {}
-
-        if hasattr(value, "dict"):
-            payload = value.dict()
-            return payload if isinstance(payload, dict) else {}
-
-        if isinstance(value, Mapping):
-            return dict(value)
-
-        if hasattr(value, "__dict__"):
-            return {
-                key: field_value
-                for key, field_value in vars(value).items()
-                if not key.startswith("_")
-            }
-
-        return {fallback_key: value} if value else {}
-
     def _normalize_error(self, exc: Exception) -> str:
         """Genera un mensaje seguro y legible para la capa de servicio."""
 
-        message = str(exc).strip()
-        return message or "Error inesperado durante la autenticación"
+        return super()._normalize_error(exc, "Error inesperado durante la autenticación")

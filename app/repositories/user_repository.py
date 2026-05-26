@@ -6,11 +6,9 @@ convertir respuestas crudas del SDK en entidades de dominio limpias.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import UUID
 
-from app.config.supabase import get_supabase_client
 from app.models.user import User, UserRole
 from app.repositories.base_repository import BaseRepository
 
@@ -27,9 +25,6 @@ class UserRepository(BaseRepository):
     """Acceso a la tabla `users` gestionada por Supabase PostgreSQL."""
 
     table_name = "users"
-
-    def __init__(self, client=None) -> None:
-        self.client = client or get_supabase_client()
 
     def list_all(self) -> list[User]:
         """Obtiene todos los usuarios ordenados por creación descendente."""
@@ -113,33 +108,7 @@ class UserRepository(BaseRepository):
             updated_at=self._parse_datetime(row.get("updated_at")),
         )
 
-    def _extract_rows(self, response) -> list[Mapping[str, object]]:
-        """Extrae la lista de filas desde la respuesta del SDK de Supabase."""
-
-        data = getattr(response, "data", None)
-        if data is None:
-            return []
-        if isinstance(data, list):
-            return [row for row in data if isinstance(row, Mapping)]
-        if isinstance(data, Mapping):
-            return [data]
-        return []
-
-    def _parse_datetime(self, value) -> datetime | None:
-        """Convierte fechas ISO de Supabase a datetime."""
-
-        if value in (None, ""):
-            return None
-        if isinstance(value, datetime):
-            return value
-        text = str(value).replace("Z", "+00:00")
-        try:
-            return datetime.fromisoformat(text)
-        except ValueError:
-            return None
-
     def _normalize_error(self, exc: Exception) -> str:
         """Genera un mensaje seguro para la capa de servicio."""
 
-        message = str(exc).strip()
-        return message or "Error inesperado en el repositorio de usuarios"
+        return super()._normalize_error(exc, "Error inesperado en el repositorio de usuarios")
