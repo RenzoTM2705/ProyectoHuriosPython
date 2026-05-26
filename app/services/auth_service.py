@@ -4,11 +4,15 @@ Esta capa valida reglas de negocio de alto nivel y traduce errores de
 infraestructura a respuestas HTTP adecuadas.
 """
 
+from __future__ import annotations
+
 from fastapi import HTTPException, status
 
+from app.config.settings import settings
 from app.models.auth import AuthSessionData
 from app.repositories.auth_repository import AuthRepository, AuthRepositoryError
 from app.schemas.auth import AuthCredentialsRequest, AuthResponse, AuthTokenResponse, AuthUserResponse
+from app.utils.jwt_handler import create_access_token
 
 
 class AuthService:
@@ -33,18 +37,30 @@ class AuthService:
             ) from exc
 
     def login(self, payload: AuthCredentialsRequest) -> AuthResponse:
-        """Inicia sesión y devuelve el JWT emitido por Supabase."""
+        """Inicia sesión y devuelve el JWT emitido por el backend."""
 
         try:
             session = self.repository.login(payload.email, payload.password)
-            if not session.access_token:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Supabase no devolvió un token de acceso",
-                )
+
+            backend_access_token = create_access_token(
+                data={
+                    "sub": session.user.id,
+                    "email": session.user.email,
+                    "source": "supabase-auth",
+                }
+            )
+
+            backend_session = AuthSessionData(
+                user=session.user,
+                access_token=backend_access_token,
+                refresh_token=session.refresh_token,
+                token_type="bearer",
+                expires_in=settings.access_token_expire_minutes * 60,
+            )
+
             return self._build_response(
                 message="Autenticación exitosa",
-                session=session,
+                session=backend_session,
             )
         except AuthRepositoryError as exc:
             raise HTTPException(

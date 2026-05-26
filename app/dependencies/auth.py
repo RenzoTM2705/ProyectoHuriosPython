@@ -1,8 +1,8 @@
 """Dependencias de autenticación y autorización.
 
-Valida JWT de Supabase, resuelve el usuario autenticado desde la tabla de
-usuarios y expone helpers reutilizables para control de acceso por rol y
-propiedad del recurso.
+Valida el JWT emitido por el backend, resuelve el usuario autenticado desde la
+tabla de usuarios y expone helpers reutilizables para control de acceso por rol
+y propiedad del recurso.
 """
 
 from __future__ import annotations
@@ -12,17 +12,16 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 
-from app.config.security import decode_supabase_jwt, get_bearer_token
 from app.models.auth import AuthenticatedUser
 from app.models.user import UserRole
 from app.repositories.order_repository import OrderNotFoundError, OrderRepository, OrderRepositoryError
 from app.repositories.user_repository import UserNotFoundError, UserRepository, UserRepositoryError
+from app.utils.jwt_handler import verify_token
 
 
-def get_current_user(token: str = Depends(get_bearer_token)) -> AuthenticatedUser:
-    """Devuelve el usuario autenticado a partir del JWT de Supabase."""
+def get_current_user(claims: dict[str, object] = Depends(verify_token)) -> AuthenticatedUser:
+    """Devuelve el usuario autenticado a partir del JWT del backend."""
 
-    claims = decode_supabase_jwt(token)
     subject = claims.get("sub")
     if not subject:
         raise HTTPException(
@@ -48,7 +47,7 @@ def get_current_user(token: str = Depends(get_bearer_token)) -> AuthenticatedUse
         id=user.id,
         email=user.email,
         role=user.role,
-        token=token,
+        token=None,
         claims=claims,
     )
 
