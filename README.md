@@ -33,7 +33,7 @@ app/
 
 1. Copia `.env.example` a `.env`.
 2. Completa `SUPABASE_URL` y `SUPABASE_KEY`.
-3. Ajusta `DATABASE_URL` y configura `JWT_SECRET_KEY` con el secreto JWT del proyecto Supabase.
+3. Configura `JWT_SECRET` con el secreto JWT del proyecto Supabase.
 
 ### Instalación
 
