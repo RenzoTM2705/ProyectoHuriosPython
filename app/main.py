@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from app.config.settings import settings
 from app.routers.auth_router import auth_router
 from app.routers.api import api_router
+from app.routers.users_router import users_router
 
 
 app = FastAPI(
@@ -37,3 +38,6 @@ app.include_router(api_router)
 
 # La autenticación se expone en rutas raíz para respetar /auth/register y /auth/login.
 app.include_router(auth_router)
+
+# Usuarios también queda expuesto en raíz para respetar GET/PUT/DELETE /users.
+app.include_router(users_router)

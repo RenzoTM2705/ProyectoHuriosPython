@@ -53,6 +53,10 @@ uvicorn app.main:app --reload
 - `GET /api/v1/health` devuelve el estado del servicio.
 - `POST /auth/register` registra un usuario con Supabase Auth.
 - `POST /auth/login` autentica y devuelve el JWT emitido por Supabase.
+- `GET /users` lista usuarios desde Supabase PostgreSQL.
+- `GET /users/{id}` consulta un usuario por identificador.
+- `PUT /users/{id}` actualiza un usuario completo.
+- `DELETE /users/{id}` elimina un usuario.
 
 ### Notas de arquitectura
 
@@ -70,5 +74,26 @@ uvicorn app.main:app --reload
 - `app/services/auth_service.py` maneja las reglas del caso de uso.
 - `app/repositories/auth_repository.py` encapsula las llamadas a Supabase Auth.
 - `app/config/security.py` prepara utilidades de seguridad y JWT para futuras rutas protegidas.
+
+### Usuarios
+
+- `app/routers/users_router.py` expone el CRUD básico de usuarios.
+- `app/services/user_service.py` resuelve las reglas del caso de uso.
+- `app/repositories/user_repository.py` consulta la tabla `users` en Supabase PostgreSQL.
+- `app/models/user.py` define la entidad de dominio y los roles `admin` y `customer`.
+- `app/schemas/user.py` valida nombres, emails, roles y respuestas públicas.
+
+### Tabla esperada en Supabase
+
+El módulo asume una tabla `users` con columnas similares a:
+
+- `id` UUID
+- `name` text
+- `email` text
+- `role` text
+- `is_active` boolean
+- `created_at` timestamptz
+- `updated_at` timestamptz
+
 
 
