@@ -7,6 +7,7 @@ global y registra los routers. La lógica de negocio vive en capas inferiores.
 from fastapi import FastAPI
 
 from app.config.settings import settings
+from app.routers.auth_router import auth_router
 from app.routers.api import api_router
 
 
@@ -33,3 +34,6 @@ def root() -> dict[str, str]:
 
 # El router agregado centraliza la composición de rutas de toda la API.
 app.include_router(api_router)
+
+# La autenticación se expone en rutas raíz para respetar /auth/register y /auth/login.
+app.include_router(auth_router)
