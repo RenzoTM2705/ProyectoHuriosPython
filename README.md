@@ -33,7 +33,7 @@ app/
 
 1. Copia `.env.example` a `.env`.
 2. Completa `SUPABASE_URL` y `SUPABASE_KEY`.
-3. Ajusta `DATABASE_URL` y los secretos JWT cuando correspondan.
+3. Ajusta `DATABASE_URL` y configura `JWT_SECRET_KEY` con el secreto JWT del proyecto Supabase.
 
 ### Instalación
 
@@ -85,7 +85,16 @@ uvicorn app.main:app --reload
 - `app/routers/auth_router.py` expone el contrato público de autenticación.
 - `app/services/auth_service.py` maneja las reglas del caso de uso.
 - `app/repositories/auth_repository.py` encapsula las llamadas a Supabase Auth.
-- `app/config/security.py` prepara utilidades de seguridad y JWT para futuras rutas protegidas.
+- `app/config/security.py` valida JWT firmados por Supabase.
+- `app/dependencies/auth.py` resuelve el usuario autenticado y aplica roles.
+
+### Seguridad
+
+- Los tokens se validan con `JWT_SECRET_KEY` y `JWT_ALGORITHM`.
+- `401 Unauthorized` se usa para token ausente, inválido o expirado.
+- `403 Forbidden` se usa para acceso denegado por rol o ausencia de perfil interno.
+- Las rutas de administración requieren rol `admin`.
+- Las rutas de carrito y creación de pedidos requieren `admin` o `customer`.
 
 ### Usuarios
 
@@ -94,6 +103,7 @@ uvicorn app.main:app --reload
 - `app/repositories/user_repository.py` consulta la tabla `users` en Supabase PostgreSQL.
 - `app/models/user.py` define la entidad de dominio y los roles `admin` y `customer`.
 - `app/schemas/user.py` valida nombres, emails, roles y respuestas públicas.
+- Todas las rutas de usuarios requieren rol `admin`.
 
 ### Productos
 
@@ -102,6 +112,7 @@ uvicorn app.main:app --reload
 - `app/repositories/product_repository.py` consulta la tabla `products` en Supabase PostgreSQL.
 - `app/models/product.py` define la entidad de dominio del producto.
 - `app/schemas/product.py` valida precio positivo, stock válido y campos requeridos.
+- Las operaciones de escritura de productos requieren rol `admin`.
 
 ### Pedidos
 
@@ -110,6 +121,8 @@ uvicorn app.main:app --reload
 - `app/repositories/order_repository.py` persiste pedidos y detalles en Supabase PostgreSQL.
 - `app/models/order.py` define las entidades `Order` y `OrderDetail`.
 - `app/schemas/order.py` valida usuario, productos, cantidades y estructura de respuesta.
+- La creación de pedidos usa el usuario autenticado resuelto desde el JWT.
+- La consulta de pedidos por identificador requiere ser `admin` o dueño del pedido.
 
 ### Carrito
 
@@ -118,6 +131,8 @@ uvicorn app.main:app --reload
 - `app/repositories/cart_repository.py` persiste carritos e items en Supabase PostgreSQL.
 - `app/models/cart.py` define las entidades `Cart` y `CartItem`.
 - `app/schemas/cart.py` valida cantidades y estructura respuestas limpias.
+- El carrito se asocia al usuario autenticado resuelto desde el JWT.
+- También existen rutas admin/owner para consultar o vaciar el carrito de un usuario concreto: `GET /cart/{user_id}` y `DELETE /cart/{user_id}/clear`.
 
 ### Tabla esperada en Supabase
 

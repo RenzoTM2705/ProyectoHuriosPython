@@ -81,7 +81,7 @@ class OrderService:
                 detail=str(exc),
             ) from exc
 
-    def create_order(self, payload: OrderCreateRequest) -> OrderItemResponse:
+    def create_order(self, current_user_id: UUID, payload: OrderCreateRequest) -> OrderItemResponse:
         """Crea un pedido validando stock y calculando el total automáticamente."""
 
         validated_lines = self._validate_and_group_items(payload.items)
@@ -95,7 +95,7 @@ class OrderService:
             order_total = self._calculate_total(validated_lines)
             created_order = self.order_repository.create_order(
                 {
-                    "user_id": str(payload.user_id),
+                    "user_id": str(current_user_id),
                     "total": order_total,
                     "status": "pending",
                 }

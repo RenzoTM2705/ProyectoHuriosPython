@@ -1,6 +1,9 @@
 """Modelos de dominio para autenticación."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from uuid import UUID
+
+from app.models.user import UserRole
 
 
 @dataclass(slots=True)
@@ -22,3 +25,14 @@ class AuthSessionData:
     refresh_token: str | None = None
     token_type: str = "bearer"
     expires_in: int | None = None
+
+
+@dataclass(slots=True)
+class AuthenticatedUser:
+    """Usuario autenticado resuelto desde el JWT y el perfil interno."""
+
+    id: UUID
+    email: str
+    role: UserRole
+    token: str | None = None
+    claims: dict[str, object] = field(default_factory=dict)
