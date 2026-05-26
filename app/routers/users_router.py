@@ -4,11 +4,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
+from app.dependencies.auth import require_admin_user
 from app.schemas.user import UserDeleteResponse, UserResponse, UserUpdateRequest
 from app.services.user_service import UserService, get_user_service
 
 
-users_router = APIRouter(prefix="/users", tags=["Users"])
+users_router = APIRouter(prefix="/users", tags=["Users"], dependencies=[Depends(require_admin_user)])
 
 
 @users_router.get("", response_model=list[UserResponse])

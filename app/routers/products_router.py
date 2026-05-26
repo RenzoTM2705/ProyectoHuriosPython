@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
+from app.dependencies.auth import require_admin_user
 from app.schemas.product import (
     ProductCreateRequest,
     ProductDeleteResponse,
@@ -34,7 +35,7 @@ def get_product(
     return service.get_product(product_id)
 
 
-@products_router.post("", response_model=ProductItemResponse)
+@products_router.post("", response_model=ProductItemResponse, dependencies=[Depends(require_admin_user)])
 def create_product(
     payload: ProductCreateRequest,
     service: ProductService = Depends(get_product_service),
@@ -44,7 +45,7 @@ def create_product(
     return service.create_product(payload)
 
 
-@products_router.put("/{product_id}", response_model=ProductItemResponse)
+@products_router.put("/{product_id}", response_model=ProductItemResponse, dependencies=[Depends(require_admin_user)])
 def update_product(
     product_id: UUID,
     payload: ProductUpdateRequest,
@@ -55,7 +56,7 @@ def update_product(
     return service.update_product(product_id, payload)
 
 
-@products_router.delete("/{product_id}", response_model=ProductDeleteResponse)
+@products_router.delete("/{product_id}", response_model=ProductDeleteResponse, dependencies=[Depends(require_admin_user)])
 def delete_product(
     product_id: UUID,
     service: ProductService = Depends(get_product_service),

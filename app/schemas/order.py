@@ -23,7 +23,6 @@ class OrderCreateRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    user_id: UUID
     items: list[OrderItemRequest] = Field(min_length=1)
 
 

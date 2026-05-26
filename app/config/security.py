@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import jwt
+from jose import ExpiredSignatureError, JWTError, jwt
 
 from app.config.settings import settings
 
@@ -29,27 +29,65 @@ def get_bearer_token(
 		raise HTTPException(
 			status_code=status.HTTP_401_UNAUTHORIZED,
 			detail="Token Bearer ausente o inválido",
+			headers={"WWW-Authenticate": "Bearer"},
 		)
 
 	return credentials.credentials
 
 
-def get_authenticated_user_id(token: str = Depends(get_bearer_token)) -> UUID:
-	"""Obtiene el identificador del usuario autenticado desde el JWT de Supabase.
-
-	Se usa el claim `sub`, que Supabase emite como identificador del usuario.
-	La validación se mantiene ligera en esta base para no acoplarla al secreto
-	operativo de Supabase; la verificación de firma puede añadirse luego.
-	"""
+def decode_supabase_jwt(token: str) -> dict[str, object]:
+	"""Valida la firma y expiración del JWT emitido por Supabase Auth."""
 
 	try:
-		claims = jwt.get_unverified_claims(token)
-		subject = claims.get("sub")
-		if not subject:
-			raise ValueError("El token no contiene el claim sub")
-		return UUID(str(subject))
+		claims = jwt.decode(
+			token,
+			JWT_SECRET_KEY,
+			algorithms=[JWT_ALGORITHM],
+			options={"verify_aud": False},
+		)
+	except ExpiredSignatureError as exc:
+		raise HTTPException(
+			status_code=status.HTTP_401_UNAUTHORIZED,
+			detail="Token expirado",
+			headers={"WWW-Authenticate": "Bearer"},
+		) from exc
+	except JWTError as exc:
+		raise HTTPException(
+			status_code=status.HTTP_401_UNAUTHORIZED,
+			detail="Token inválido",
+			headers={"WWW-Authenticate": "Bearer"},
+		) from exc
+
+	subject = claims.get("sub")
+	if not subject:
+		raise HTTPException(
+			status_code=status.HTTP_401_UNAUTHORIZED,
+			detail="Token inválido",
+			headers={"WWW-Authenticate": "Bearer"},
+		)
+
+	issuer = claims.get("iss")
+	if settings.supabase_url and issuer:
+		expected_issuer = f"{settings.supabase_url.rstrip('/')}/auth/v1"
+		if issuer != expected_issuer:
+			raise HTTPException(
+				status_code=status.HTTP_401_UNAUTHORIZED,
+				detail="Token inválido",
+				headers={"WWW-Authenticate": "Bearer"},
+			)
+
+	return claims
+
+
+def get_authenticated_user_id(token: str = Depends(get_bearer_token)) -> UUID:
+	"""Obtiene el identificador del usuario autenticado desde el JWT de Supabase."""
+
+	claims = decode_supabase_jwt(token)
+	try:
+		return UUID(str(claims.get("sub")))
 	except Exception as exc:
 		raise HTTPException(
 			status_code=status.HTTP_401_UNAUTHORIZED,
-			detail="Token JWT inválido o no autenticado",
+			detail="Token inválido",
+			headers={"WWW-Authenticate": "Bearer"},
 		) from exc
