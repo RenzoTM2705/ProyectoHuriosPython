@@ -1,0 +1,35 @@
+# Variables sensibles
+.env
+.env.local
+.env.*.local
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Caché y compilados de Python
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE y tooling local
+.idea/
+.vscode/
+
+# Distribución y temporales
+dist/
+build/
+*.log
+*.tmp
+
+# Secretos y credenciales
+*.key
+*.pem
+*.crt
+*.secret

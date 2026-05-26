@@ -1,8 +1,11 @@
 """Esquemas de autenticación para la API pública."""
 
 import re
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.models.user import UserRole
 
 
 class AuthCredentialsRequest(BaseModel):
@@ -51,3 +54,14 @@ class AuthResponse(BaseModel):
     message: str
     user: AuthUserResponse
     tokens: AuthTokenResponse | None = None
+
+
+class CurrentUserResponse(BaseModel):
+    """Usuario autenticado expuesto por el endpoint protegido."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: EmailStr
+    role: UserRole
+    claims: dict[str, object] = Field(default_factory=dict)
