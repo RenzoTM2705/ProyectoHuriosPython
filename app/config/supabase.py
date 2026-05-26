@@ -25,4 +25,7 @@ def get_supabase_client() -> Client:
             "Supabase no está configurado. Define SUPABASE_URL y SUPABASE_KEY."
         )
 
-    return create_client(settings.supabase_url, settings.supabase_key)
+    try:
+        return create_client(settings.supabase_url, settings.supabase_key)
+    except Exception as exc:  # pragma: no cover - depende de la red y credenciales externas
+        raise SupabaseConfigError("No se pudo inicializar el cliente de Supabase") from exc
