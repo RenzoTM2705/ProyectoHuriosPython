@@ -57,6 +57,11 @@ uvicorn app.main:app --reload
 - `GET /users/{id}` consulta un usuario por identificador.
 - `PUT /users/{id}` actualiza un usuario completo.
 - `DELETE /users/{id}` elimina un usuario.
+- `GET /products` lista productos desde Supabase PostgreSQL.
+- `GET /products/{id}` consulta un producto por identificador.
+- `POST /products` crea un producto nuevo.
+- `PUT /products/{id}` actualiza un producto completo.
+- `DELETE /products/{id}` elimina un producto.
 
 ### Notas de arquitectura
 
@@ -83,17 +88,29 @@ uvicorn app.main:app --reload
 - `app/models/user.py` define la entidad de dominio y los roles `admin` y `customer`.
 - `app/schemas/user.py` valida nombres, emails, roles y respuestas públicas.
 
+### Productos
+
+- `app/routers/products_router.py` expone el CRUD de productos.
+- `app/services/product_service.py` maneja las reglas del caso de uso.
+- `app/repositories/product_repository.py` consulta la tabla `products` en Supabase PostgreSQL.
+- `app/models/product.py` define la entidad de dominio del producto.
+- `app/schemas/product.py` valida precio positivo, stock válido y campos requeridos.
+
 ### Tabla esperada en Supabase
 
-El módulo asume una tabla `users` con columnas similares a:
+El módulo asume una tabla `products` con columnas similares a:
 
 - `id` UUID
 - `name` text
-- `email` text
-- `role` text
-- `is_active` boolean
+- `description` text
+- `price` numeric
+- `stock` integer
+- `sku` text
+- `status` text
 - `created_at` timestamptz
 - `updated_at` timestamptz
+
+El módulo de usuarios mantiene su propia definición de tabla en la sección anterior.
 
 
 

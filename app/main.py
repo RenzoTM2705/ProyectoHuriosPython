@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from app.config.settings import settings
 from app.routers.auth_router import auth_router
 from app.routers.api import api_router
+from app.routers.products_router import products_router
 from app.routers.users_router import users_router
 
 
@@ -41,3 +42,6 @@ app.include_router(auth_router)
 
 # Usuarios también queda expuesto en raíz para respetar GET/PUT/DELETE /users.
 app.include_router(users_router)
+
+# Productos se exponen en raíz para respetar GET/POST/PUT/DELETE /products.
+app.include_router(products_router)
