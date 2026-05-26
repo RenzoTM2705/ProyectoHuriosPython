@@ -65,6 +65,10 @@ uvicorn app.main:app --reload
 - `POST /orders` crea un pedido y calcula el total automáticamente.
 - `GET /orders` lista pedidos con sus detalles.
 - `GET /orders/{id}` consulta un pedido por identificador.
+- `POST /cart/add` agrega productos al carrito autenticado.
+- `DELETE /cart/remove/{product_id}` elimina un producto del carrito.
+- `GET /cart` obtiene el carrito completo.
+- `DELETE /cart/clear` vacía el carrito.
 
 ### Notas de arquitectura
 
@@ -106,6 +110,32 @@ uvicorn app.main:app --reload
 - `app/repositories/order_repository.py` persiste pedidos y detalles en Supabase PostgreSQL.
 - `app/models/order.py` define las entidades `Order` y `OrderDetail`.
 - `app/schemas/order.py` valida usuario, productos, cantidades y estructura de respuesta.
+
+### Carrito
+
+- `app/routers/cart_router.py` expone el flujo público del carrito.
+- `app/services/cart_service.py` valida stock, calcula subtotales y recalcula totales.
+- `app/repositories/cart_repository.py` persiste carritos e items en Supabase PostgreSQL.
+- `app/models/cart.py` define las entidades `Cart` y `CartItem`.
+- `app/schemas/cart.py` valida cantidades y estructura respuestas limpias.
+
+### Tabla esperada en Supabase
+
+El módulo asume tablas `carts` y `cart_items` con columnas similares a:
+
+- `carts.id` UUID
+- `carts.user_id` UUID
+- `carts.total_amount` numeric
+- `carts.total_items` integer
+- `carts.created_at` timestamptz
+- `carts.updated_at` timestamptz
+- `cart_items.id` UUID
+- `cart_items.cart_id` UUID
+- `cart_items.product_id` UUID
+- `cart_items.product_name` text
+- `cart_items.quantity` integer
+- `cart_items.unit_price` numeric
+- `cart_items.subtotal` numeric
 
 ### Tabla esperada en Supabase
 

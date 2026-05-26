@@ -7,6 +7,7 @@ global y registra los routers. La lógica de negocio vive en capas inferiores.
 from fastapi import FastAPI
 
 from app.config.settings import settings
+from app.routers.cart_router import cart_router
 from app.routers.auth_router import auth_router
 from app.routers.api import api_router
 from app.routers.orders_router import orders_router
@@ -49,3 +50,6 @@ app.include_router(products_router)
 
 # Pedidos se exponen en raíz para respetar POST/GET /orders y GET /orders/{id}.
 app.include_router(orders_router)
+
+# Carrito se expone en raíz y queda asociado al usuario autenticado por JWT.
+app.include_router(cart_router)
