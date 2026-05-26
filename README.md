@@ -7,8 +7,8 @@ estructura inspirada en Spring Boot y preparada para escalar por capas.
 
 - Separación clara entre `routers`, `services`, `repositories`, `models`, `schemas`, `config` y `utils`.
 - Punto de entrada funcional con FastAPI.
-- Integración preparada para Supabase y PostgreSQL.
-- Estructura lista para autenticación JWT en una fase posterior.
+- Integración con Supabase Auth usando JWT emitido por Supabase.
+- Estructura preparada para PostgreSQL y autenticación JWT futura.
 - Código base pensado para clean architecture y mantenimiento a largo plazo.
 
 ### Estructura
@@ -51,6 +51,8 @@ uvicorn app.main:app --reload
 
 - `GET /` valida que la API está levantada.
 - `GET /api/v1/health` devuelve el estado del servicio.
+- `POST /auth/register` registra un usuario con Supabase Auth.
+- `POST /auth/login` autentica y devuelve el JWT emitido por Supabase.
 
 ### Notas de arquitectura
 
@@ -59,6 +61,14 @@ uvicorn app.main:app --reload
 - `repositories` abstrae el acceso a datos.
 - `models` representa el dominio.
 - `schemas` define contratos de entrada y salida.
-- `config` centraliza configuración, Supabase y seguridad futura.
+- `config` centraliza configuración, Supabase y seguridad.
 - `utils` concentra utilidades compartidas.
+
+### Autenticación
+
+- `app/routers/auth_router.py` expone el contrato público de autenticación.
+- `app/services/auth_service.py` maneja las reglas del caso de uso.
+- `app/repositories/auth_repository.py` encapsula las llamadas a Supabase Auth.
+- `app/config/security.py` prepara utilidades de seguridad y JWT para futuras rutas protegidas.
+
 
