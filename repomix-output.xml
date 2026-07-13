@@ -1,0 +1,3303 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+app/
+  config/
+    __init__.py
+    security.py
+    settings.py
+    supabase.py
+  dependencies/
+    __init__.py
+    auth.py
+  models/
+    __init__.py
+    auth.py
+    base.py
+    cart.py
+    order.py
+    product.py
+    user.py
+  repositories/
+    __init__.py
+    auth_repository.py
+    base_repository.py
+    cart_repository.py
+    health_repository.py
+    order_repository.py
+    product_repository.py
+    user_repository.py
+  routers/
+    __init__.py
+    api.py
+    auth_router.py
+    cart_router.py
+    health.py
+    orders_router.py
+    products_router.py
+    users_router.py
+  schemas/
+    __init__.py
+    auth.py
+    cart.py
+    health.py
+    order.py
+    product.py
+    user.py
+  services/
+    __init__.py
+    auth_service.py
+    cart_service.py
+    health_service.py
+    order_service.py
+    product_service.py
+    user_service.py
+  utils/
+    __init__.py
+    jwt_handler.py
+    logger.py
+  __init__.py
+  main.py
+.env.example
+.gitignore
+README.md
+requirements.txt
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="app/config/__init__.py">
+"""Configuraciones de la aplicación."""
+</file>
+
+<file path="app/config/security.py">
+"""Compatibilidad para utilidades de seguridad existentes.
+
+El proyecto usa ahora app.utils.jwt_handler como fuente de verdad para JWT.
+"""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from fastapi import Depends
+
+from app.utils.jwt_handler import decode_token, oauth2_scheme, verify_token
+
+
+def get_bearer_token(token: str = Depends(oauth2_scheme)) -> str:
+	"""Expone el token Bearer para módulos que aún lo consumen directamente."""
+
+	return token
+
+
+def decode_supabase_jwt(token: str) -> dict[str, object]:
+	"""Compatibilidad hacia atrás para código existente."""
+
+	return decode_token(token)
+
+
+def get_authenticated_user_id(token: str = Depends(oauth2_scheme)) -> UUID:
+	"""Obtiene el identificador del usuario autenticado desde el JWT."""
+
+	claims = verify_token(token)
+	return UUID(str(claims.get("sub")))
+</file>
+
+<file path="app/config/settings.py">
+"""Configuración centralizada de la aplicación.
+
+La aplicación carga las variables desde .env, valida las obligatorias y expone
+una única instancia para evitar valores hardcodeados o dispersos por el código.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(BASE_DIR / ".env")
+
+
+class SettingsError(RuntimeError):
+    """Señala variables de entorno ausentes o inválidas."""
+
+
+def _require_env(name: str) -> str:
+    """Obtiene una variable obligatoria y falla rápido si no existe."""
+
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise SettingsError(f"Falta la variable obligatoria: {name}")
+    return value
+
+
+def _get_int_env(name: str, default: str) -> int:
+    """Lee una variable entera y valida que el valor sea numérico."""
+
+    raw_value = os.getenv(name, default).strip()
+    try:
+        return int(raw_value)
+    except ValueError as exc:
+        raise SettingsError(f"La variable {name} debe ser un número entero") from exc
+
+
+def _get_bool_env(name: str, default: str = "false") -> bool:
+    """Lee una variable booleana usando valores típicos de entorno."""
+
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass(frozen=True, slots=True)
+class Settings:
+    """Variables de entorno consumidas por la API."""
+
+    app_name: str
+    app_version: str
+    environment: str
+    debug: bool
+    supabase_url: str
+    supabase_key: str
+    jwt_secret: str
+    jwt_algorithm: str
+    access_token_expire_minutes: int
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Carga y valida la configuración una sola vez por proceso."""
+
+    return Settings(
+        app_name=os.getenv("APP_NAME", "Hurios Rally API"),
+        app_version=os.getenv("APP_VERSION", "0.1.0"),
+        environment=os.getenv("ENVIRONMENT", "development"),
+        debug=_get_bool_env("DEBUG", "true"),
+        supabase_url=_require_env("SUPABASE_URL"),
+        supabase_key=_require_env("SUPABASE_KEY"),
+        jwt_secret=_require_env("JWT_SECRET"),
+        jwt_algorithm=os.getenv("JWT_ALGORITHM", "HS256") or "HS256",
+        access_token_expire_minutes=_get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", "60"),
+    )
+
+
+settings = get_settings()
+</file>
+
+<file path="app/config/supabase.py">
+"""Cliente de Supabase centralizado.
+
+La conexión se resuelve una sola vez y se reutiliza en toda la aplicación.
+Si faltan variables de entorno, se expone un error explícito para fallar rápido
+y evitar errores silenciosos en tiempo de ejecución.
+"""
+
+from functools import lru_cache
+
+from supabase import Client, create_client
+
+from app.config.settings import settings
+
+
+class SupabaseConfigError(RuntimeError):
+    """Señala que la configuración de Supabase es incompleta o inválida."""
+
+
+@lru_cache
+def get_supabase_client() -> Client:
+    """Crea y reutiliza un cliente oficial de Supabase para toda la app."""
+
+    if not settings.supabase_url or not settings.supabase_key:
+        raise SupabaseConfigError(
+            "Supabase no está configurado. Define SUPABASE_URL y SUPABASE_KEY."
+        )
+
+    try:
+        return create_client(settings.supabase_url, settings.supabase_key)
+    except Exception as exc:  # pragma: no cover - depende de la red y credenciales externas
+        raise SupabaseConfigError("No se pudo inicializar el cliente de Supabase") from exc
+</file>
+
+<file path="app/dependencies/__init__.py">
+"""Dependencias reutilizables para autenticación y autorización."""
+</file>
+
+<file path="app/dependencies/auth.py">
+"""Dependencias de autenticación y autorización.
+
+Valida el JWT emitido por el backend, resuelve el usuario autenticado desde la
+tabla de usuarios y expone helpers reutilizables para control de acceso por rol
+y propiedad del recurso.
+"""
+
+from __future__ import annotations
+
+from typing import Callable
+from uuid import UUID
+
+from fastapi import Depends, HTTPException, status
+
+from app.models.auth import AuthenticatedUser
+from app.models.user import UserRole
+from app.repositories.order_repository import OrderNotFoundError, OrderRepository, OrderRepositoryError
+from app.repositories.user_repository import UserNotFoundError, UserRepository, UserRepositoryError
+from app.utils.jwt_handler import verify_token
+
+
+def get_current_user(claims: dict[str, object] = Depends(verify_token)) -> AuthenticatedUser:
+    """Devuelve el usuario autenticado a partir del JWT del backend."""
+
+    subject = claims.get("sub")
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        user = UserRepository().get_by_id(UUID(str(subject)))
+    except UserNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado",
+        ) from exc
+    except UserRepositoryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    return AuthenticatedUser(
+        id=user.id,
+        email=user.email,
+        role=user.role,
+        token=None,
+        claims=claims,
+    )
+
+
+def require_role(*allowed_roles: UserRole) -> Callable[[AuthenticatedUser], AuthenticatedUser]:
+    """Construye una dependencia para validar roles permitidos."""
+
+    def dependency(current_user: AuthenticatedUser = Depends(get_current_user)) -> AuthenticatedUser:
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado",
+            )
+        return current_user
+
+    return dependency
+
+
+require_admin_user = require_role(UserRole.ADMIN)
+require_customer_user = require_role(UserRole.CUSTOMER)
+require_customer_or_admin_user = require_role(UserRole.ADMIN, UserRole.CUSTOMER)
+
+
+def require_order_owner_or_admin(order_id: UUID, current_user: AuthenticatedUser = Depends(get_current_user)) -> AuthenticatedUser:
+    """Permite acceso solo al dueño del pedido o a un administrador."""
+
+    if current_user.role == UserRole.ADMIN:
+        return current_user
+
+    try:
+        order = OrderRepository().get_by_id(order_id)
+    except OrderNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pedido no encontrado",
+        ) from exc
+    except OrderRepositoryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    if order.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado",
+        )
+
+    return current_user
+
+
+def require_cart_owner_or_admin(user_id: UUID, current_user: AuthenticatedUser = Depends(get_current_user)) -> AuthenticatedUser:
+    """Permite acceso solo al dueño del carrito o a un administrador."""
+
+    if current_user.role == UserRole.ADMIN or current_user.id == user_id:
+        return current_user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Acceso denegado",
+    )
+</file>
+
+<file path="app/models/__init__.py">
+"""Modelos de dominio."""
+</file>
+
+<file path="app/models/auth.py">
+"""Modelos de dominio para autenticación."""
+
+from dataclasses import dataclass, field
+from uuid import UUID
+
+from app.models.user import UserRole
+
+
+@dataclass(slots=True)
+class AuthUser:
+    """Representa un usuario autenticado o registrado."""
+
+    id: str
+    email: str
+    created_at: str | None = None
+    confirmed_at: str | None = None
+
+
+@dataclass(slots=True)
+class AuthSessionData:
+    """Datos de sesión devueltos por Supabase Auth."""
+
+    user: AuthUser
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    expires_in: int | None = None
+
+
+@dataclass(slots=True)
+class AuthenticatedUser:
+    """Usuario autenticado resuelto desde el JWT y el perfil interno."""
+
+    id: UUID
+    email: str
+    role: UserRole
+    token: str | None = None
+    claims: dict[str, object] = field(default_factory=dict)
+</file>
+
+<file path="app/models/base.py">
+"""Modelo base de dominio.
+
+Aquí vivirán las entidades del negocio, separadas de los esquemas de API.
+"""
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from uuid import UUID, uuid4
+
+
+@dataclass(slots=True)
+class BaseDomainModel:
+    """Entidad base reutilizable en el dominio."""
+
+    id: UUID = field(default_factory=uuid4)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+</file>
+
+<file path="app/models/cart.py">
+"""Modelos de dominio para carrito de compras."""
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+
+@dataclass(slots=True)
+class CartItem:
+    """Elemento individual de un carrito."""
+
+    id: UUID
+    cart_id: UUID
+    product_id: UUID
+    product_name: str
+    quantity: int
+    unit_price: Decimal
+    subtotal: Decimal
+
+
+@dataclass(slots=True)
+class Cart:
+    """Carrito de compras asociado a un usuario autenticado."""
+
+    id: UUID
+    user_id: UUID
+    total_amount: Decimal = Decimal("0")
+    total_items: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    items: list[CartItem] = field(default_factory=list)
+</file>
+
+<file path="app/models/order.py">
+"""Modelos de dominio para pedidos."""
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from decimal import Decimal
+from enum import StrEnum
+from uuid import UUID
+
+
+class OrderStatus(StrEnum):
+    """Estados básicos del pedido para futuras ampliaciones."""
+
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    CANCELLED = "cancelled"
+
+
+@dataclass(slots=True)
+class OrderDetail:
+    """Detalle de un pedido asociado a un producto concreto."""
+
+    id: UUID
+    order_id: UUID
+    product_id: UUID
+    product_name: str
+    quantity: int
+    unit_price: Decimal
+    subtotal: Decimal
+
+
+@dataclass(slots=True)
+class Order:
+    """Entidad de dominio para pedidos."""
+
+    id: UUID
+    user_id: UUID
+    total: Decimal
+    status: OrderStatus = OrderStatus.PENDING
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    details: list[OrderDetail] = field(default_factory=list)
+</file>
+
+<file path="app/models/product.py">
+"""Modelo de dominio para productos."""
+
+from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
+from enum import StrEnum
+from uuid import UUID
+
+
+class ProductStatus(StrEnum):
+    """Estados simples del producto para futuras extensiones."""
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+
+@dataclass(slots=True)
+class Product:
+    """Entidad de dominio para productos almacenados en Supabase."""
+
+    id: UUID
+    name: str
+    description: str | None
+    price: Decimal
+    stock: int
+    sku: str
+    status: ProductStatus = ProductStatus.ACTIVE
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+</file>
+
+<file path="app/models/user.py">
+"""Modelos de dominio para usuarios."""
+
+from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
+from uuid import UUID
+
+
+class UserRole(StrEnum):
+    """Roles de negocio soportados por el módulo de usuarios."""
+
+    ADMIN = "admin"
+    CUSTOMER = "customer"
+
+
+@dataclass(slots=True)
+class User:
+    """Entidad de dominio que representa un usuario en la capa de negocio."""
+
+    id: UUID
+    name: str
+    email: str
+    role: UserRole
+    is_active: bool = True
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+</file>
+
+<file path="app/repositories/__init__.py">
+"""Repositorios de acceso a datos."""
+</file>
+
+<file path="app/repositories/auth_repository.py">
+"""Repositorio de autenticación con Supabase Auth.
+
+La responsabilidad de esta capa es hablar con Supabase y normalizar el resultado
+para la capa de servicio. No decide qué error HTTP devolver.
+"""
+
+from __future__ import annotations
+
+from app.models.auth import AuthSessionData, AuthUser
+from app.repositories.base_repository import BaseRepository
+
+
+class AuthRepositoryError(Exception):
+    """Error de acceso a la infraestructura de autenticación."""
+
+
+class AuthRepository(BaseRepository):
+    """Acceso a Supabase Auth para registro e inicio de sesión."""
+
+    def register(self, email: str, password: str) -> AuthSessionData:
+        """Registra un usuario en Supabase Auth."""
+
+        try:
+            response = self.client.auth.sign_up({"email": email, "password": password})
+            return self._to_session_data(response)
+        except Exception as exc:  # pragma: no cover - normalización de error externo
+            raise AuthRepositoryError(self._normalize_error(exc)) from exc
+
+    def login(self, email: str, password: str) -> AuthSessionData:
+        """Autentica un usuario y devuelve la sesión emitida por Supabase."""
+
+        try:
+            response = self.client.auth.sign_in_with_password(
+                {"email": email, "password": password}
+            )
+            return self._to_session_data(response)
+        except Exception as exc:  # pragma: no cover - normalización de error externo
+            raise AuthRepositoryError(self._normalize_error(exc)) from exc
+
+    def _to_session_data(self, response) -> AuthSessionData:
+        """Convierte la respuesta cruda de Supabase en un modelo de dominio."""
+
+        user_payload = self._extract_payload(getattr(response, "user", None), "user")
+        session_payload = self._extract_payload(getattr(response, "session", None), "session")
+
+        if not user_payload:
+            raise AuthRepositoryError("Supabase no devolvió información del usuario")
+
+        user = AuthUser(
+            id=str(user_payload.get("id", "")),
+            email=str(user_payload.get("email", "")),
+            created_at=user_payload.get("created_at"),
+            confirmed_at=user_payload.get("confirmed_at"),
+        )
+
+        return AuthSessionData(
+            user=user,
+            access_token=session_payload.get("access_token") if session_payload else None,
+            refresh_token=session_payload.get("refresh_token") if session_payload else None,
+            token_type=session_payload.get("token_type", "bearer") if session_payload else "bearer",
+            expires_in=session_payload.get("expires_in") if session_payload else None,
+        )
+
+    def _normalize_error(self, exc: Exception) -> str:
+        """Genera un mensaje seguro y legible para la capa de servicio."""
+
+        return super()._normalize_error(exc, "Error inesperado durante la autenticación")
+</file>
+
+<file path="app/repositories/base_repository.py">
+"""Contrato base para repositorios.
+
+Centraliza la conexión reutilizable con Supabase y utilidades comunes de
+normalización de datos para evitar duplicación en cada repositorio.
+"""
+
+from __future__ import annotations
+
+from abc import ABC
+from collections.abc import Mapping
+from datetime import datetime
+
+from app.config.supabase import get_supabase_client
+
+
+class BaseRepository(ABC):
+    """Clase base para repositorios de la capa de infraestructura."""
+
+    def __init__(self, client=None) -> None:
+        self.client = client or get_supabase_client()
+
+    def _extract_rows(self, response) -> list[Mapping[str, object]]:
+        """Extrae filas desde la respuesta del SDK de Supabase."""
+
+        data = getattr(response, "data", None)
+        if data is None:
+            return []
+        if isinstance(data, list):
+            return [row for row in data if isinstance(row, Mapping)]
+        if isinstance(data, Mapping):
+            return [data]
+        return []
+
+    def _extract_payload(self, value, fallback_key: str) -> dict[str, object]:
+        """Normaliza objetos o diccionarios devueltos por el SDK de Supabase."""
+
+        if value is None:
+            return {}
+
+        if hasattr(value, "model_dump"):
+            payload = value.model_dump()
+            return payload if isinstance(payload, dict) else {}
+
+        if hasattr(value, "dict"):
+            payload = value.dict()
+            return payload if isinstance(payload, dict) else {}
+
+        if isinstance(value, Mapping):
+            return dict(value)
+
+        if hasattr(value, "__dict__"):
+            return {
+                key: field_value
+                for key, field_value in vars(value).items()
+                if not key.startswith("_")
+            }
+
+        return {fallback_key: value} if value else {}
+
+    def _parse_datetime(self, value) -> datetime | None:
+        """Convierte fechas ISO de Supabase a datetime."""
+
+        if value in (None, ""):
+            return None
+        if isinstance(value, datetime):
+            return value
+        text = str(value).replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(text)
+        except ValueError:
+            return None
+
+    def _normalize_error(self, exc: Exception, fallback_message: str) -> str:
+        """Genera un mensaje seguro y legible para la capa de servicio."""
+
+        message = str(exc).strip()
+        return message or fallback_message
+</file>
+
+<file path="app/repositories/cart_repository.py">
+"""Repositorio de carrito sobre Supabase PostgreSQL."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from decimal import Decimal
+from uuid import UUID, uuid4
+
+from app.models.cart import Cart, CartItem
+from app.repositories.base_repository import BaseRepository
+
+
+class CartRepositoryError(Exception):
+    """Error de persistencia para el carrito."""
+
+
+class CartNotFoundError(CartRepositoryError):
+    """Señala que el carrito solicitado no existe."""
+
+
+class CartRepository(BaseRepository):
+    """Acceso a las tablas `carts` y `cart_items`."""
+
+    carts_table = "carts"
+    items_table = "cart_items"
+
+    def get_or_create_cart(self, user_id: UUID) -> Cart:
+        """Devuelve el carrito del usuario o lo crea si no existe."""
+
+        cart = self.get_cart_by_user_id(user_id)
+        if cart is not None:
+            return cart
+        return self.create_cart(user_id)
+
+    def get_cart_by_user_id(self, user_id: UUID) -> Cart | None:
+        """Busca el carrito de un usuario."""
+
+        try:
+            response = (
+                self.client.table(self.carts_table)
+                .select("*")
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                return None
+            return self._attach_items(self._to_cart(rows[0]))
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise CartRepositoryError(self._normalize_error(exc)) from exc
+
+    def create_cart(self, user_id: UUID) -> Cart:
+        """Crea un carrito vacío para un usuario."""
+
+        try:
+            now = datetime.now(UTC).isoformat()
+            payload = {
+                "id": str(uuid4()),
+                "user_id": str(user_id),
+                "total_amount": Decimal("0"),
+                "total_items": 0,
+                "created_at": now,
+                "updated_at": now,
+            }
+            response = self.client.table(self.carts_table).insert(payload).execute()
+            rows = self._extract_rows(response)
+            if not rows:
+                raise CartRepositoryError("Supabase no devolvió el carrito creado")
+            return self._attach_items(self._to_cart(rows[0]))
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise CartRepositoryError(self._normalize_error(exc)) from exc
+
+    def get_item_by_product_id(self, cart_id: UUID, product_id: UUID) -> CartItem | None:
+        """Busca un producto dentro del carrito."""
+
+        try:
+            response = (
+                self.client.table(self.items_table)
+                .select("*")
+                .eq("cart_id", str(cart_id))
+                .eq("product_id", str(product_id))
+                .limit(1)
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                return None
+            return self._to_item(rows[0])
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise CartRepositoryError(self._normalize_error(exc)) from exc
+
+    def list_items(self, cart_id: UUID) -> list[CartItem]:
+        """Lista los items de un carrito."""
+
+        try:
+            response = (
+                self.client.table(self.items_table)
+                .select("*")
+                .eq("cart_id", str(cart_id))
+                .order("created_at", desc=False)
+                .execute()
+            )
+            return [self._to_item(row) for row in self._extract_rows(response)]
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise CartRepositoryError(self._normalize_error(exc)) from exc
+
+    def add_item(self, payload: dict[str, object]) -> CartItem:
+        """Inserta un item en el carrito."""
+
+        try:
+            data = dict(payload)
+            data.setdefault("id", str(uuid4()))
+            data["created_at"] = datetime.now(UTC).isoformat()
+            data["updated_at"] = datetime.now(UTC).isoformat()
+
+            response = self.client.table(self.items_table).insert(data).execute()
+            rows = self._extract_rows(response)
+            if not rows:
+                raise CartRepositoryError("Supabase no devolvió el item creado")
+            return self._to_item(rows[0])
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise CartRepositoryError(self._normalize_error(exc)) from exc
+
+    def update_item(self, item_id: UUID, payload: dict[str, object]) -> CartItem:
+        """Actualiza un item del carrito."""
+
+        try:
+            data = dict(payload)
+            data["updated_at"] = datetime.now(UTC).isoformat()
+            response = (
+                self.client.table(self.items_table)
+                .update(data)
+                .select("*")
+                .eq("id", str(item_id))
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise CartNotFoundError(f"Item {item_id} no encontrado")
+            return self._to_item(rows[0])
+        except CartNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise CartRepositoryError(self._normalize_error(exc)) from exc
+
+    def delete_item_by_product_id(self, cart_id: UUID, product_id: UUID) -> None:
+        """Elimina un item por producto dentro de un carrito."""
+
+        try:
+            self.client.table(self.items_table).delete().eq("cart_id", str(cart_id)).eq("product_id", str(product_id)).execute()
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise CartRepositoryError(self._normalize_error(exc)) from exc
+
+    def clear_cart(self, cart_id: UUID) -> None:
+        """Elimina todos los items del carrito."""
+
+        try:
+            self.client.table(self.items_table).delete().eq("cart_id", str(cart_id)).execute()
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise CartRepositoryError(self._normalize_error(exc)) from exc
+
+    def update_cart_totals(self, cart_id: UUID, total_amount: Decimal, total_items: int) -> Cart:
+        """Actualiza los totales del carrito."""
+
+        try:
+            response = (
+                self.client.table(self.carts_table)
+                .update(
+                    {
+                        "total_amount": total_amount,
+                        "total_items": total_items,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
+                .select("*")
+                .eq("id", str(cart_id))
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise CartNotFoundError(f"Carrito {cart_id} no encontrado")
+            return self._attach_items(self._to_cart(rows[0]))
+        except CartNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise CartRepositoryError(self._normalize_error(exc)) from exc
+
+    def _attach_items(self, cart: Cart) -> Cart:
+        """Carga los items y devuelve el carrito completo."""
+
+        cart.items = self.list_items(cart.id)
+        return cart
+
+    def _to_cart(self, row: Mapping[str, object]) -> Cart:
+        """Convierte una fila de Supabase en un carrito de dominio."""
+
+        return Cart(
+            id=UUID(str(row.get("id"))),
+            user_id=UUID(str(row.get("user_id"))),
+            total_amount=Decimal(str(row.get("total_amount", "0"))),
+            total_items=int(row.get("total_items", 0)),
+            created_at=self._parse_datetime(row.get("created_at")),
+            updated_at=self._parse_datetime(row.get("updated_at")),
+        )
+
+    def _to_item(self, row: Mapping[str, object]) -> CartItem:
+        """Convierte una fila de Supabase en un item de carrito."""
+
+        return CartItem(
+            id=UUID(str(row.get("id"))),
+            cart_id=UUID(str(row.get("cart_id"))),
+            product_id=UUID(str(row.get("product_id"))),
+            product_name=str(row.get("product_name", "")),
+            quantity=int(row.get("quantity", 0)),
+            unit_price=Decimal(str(row.get("unit_price", "0"))),
+            subtotal=Decimal(str(row.get("subtotal", "0"))),
+        )
+
+    def _normalize_error(self, exc: Exception) -> str:
+        """Genera un mensaje seguro y legible para la capa de servicio."""
+
+        return super()._normalize_error(exc, "Error inesperado en el repositorio del carrito")
+</file>
+
+<file path="app/repositories/health_repository.py">
+"""Repositorio de ejemplo para validar la estructura por capas."""
+
+from app.repositories.base_repository import BaseRepository
+
+
+class HealthRepository(BaseRepository):
+    """Repositorio mínimo que luego podrá consultar infraestructura real."""
+
+    def get_status(self) -> dict[str, str]:
+        """Devuelve información estática mientras no exista backend persistente."""
+
+        return {
+            "status": "ok",
+            "message": "Servicio saludable y listo para integraciones futuras",
+        }
+</file>
+
+<file path="app/repositories/order_repository.py">
+"""Repositorio de pedidos sobre Supabase PostgreSQL.
+
+Esta capa encapsula las tablas `orders` y `order_details` y mantiene el acceso
+a datos aislado de las reglas de negocio.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from decimal import Decimal
+from uuid import UUID, uuid4
+
+from app.models.order import Order, OrderDetail, OrderStatus
+from app.repositories.base_repository import BaseRepository
+
+
+class OrderRepositoryError(Exception):
+    """Error de persistencia de pedidos."""
+
+
+class OrderNotFoundError(OrderRepositoryError):
+    """Señala que el pedido solicitado no existe."""
+
+
+class OrderRepository(BaseRepository):
+    """Acceso a las tablas `orders` y `order_details`."""
+
+    orders_table = "orders"
+    details_table = "order_details"
+
+    def list_all(self) -> list[Order]:
+        """Lista pedidos con sus detalles."""
+
+        try:
+            response = self.client.table(self.orders_table).select("*").order("created_at", desc=True).execute()
+            orders = [self._to_order(row) for row in self._extract_rows(response)]
+            return [self._attach_details(order) for order in orders]
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise OrderRepositoryError(self._normalize_error(exc)) from exc
+
+    def get_by_id(self, order_id: UUID) -> Order:
+        """Obtiene un pedido por su identificador."""
+
+        try:
+            response = (
+                self.client.table(self.orders_table)
+                .select("*")
+                .eq("id", str(order_id))
+                .limit(1)
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise OrderNotFoundError(f"Pedido {order_id} no encontrado")
+            return self._attach_details(self._to_order(rows[0]))
+        except OrderNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise OrderRepositoryError(self._normalize_error(exc)) from exc
+
+    def create_order(self, payload: dict[str, object]) -> Order:
+        """Crea el encabezado del pedido."""
+
+        try:
+            data = dict(payload)
+            data.setdefault("id", str(uuid4()))
+            data["created_at"] = datetime.now(UTC).isoformat()
+            data["updated_at"] = datetime.now(UTC).isoformat()
+
+            response = self.client.table(self.orders_table).insert(data).execute()
+            rows = self._extract_rows(response)
+            if not rows:
+                raise OrderRepositoryError("Supabase no devolvió el pedido creado")
+            return self._to_order(rows[0])
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise OrderRepositoryError(self._normalize_error(exc)) from exc
+
+    def create_details(self, payload: list[dict[str, object]]) -> list[OrderDetail]:
+        """Crea los detalles del pedido en lote."""
+
+        try:
+            response = self.client.table(self.details_table).insert(payload).execute()
+            return [self._to_detail(row) for row in self._extract_rows(response)]
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise OrderRepositoryError(self._normalize_error(exc)) from exc
+
+    def get_details_by_order_id(self, order_id: UUID) -> list[OrderDetail]:
+        """Obtiene los detalles asociados a un pedido."""
+
+        try:
+            response = (
+                self.client.table(self.details_table)
+                .select("*")
+                .eq("order_id", str(order_id))
+                .order("created_at", desc=False)
+                .execute()
+            )
+            return [self._to_detail(row) for row in self._extract_rows(response)]
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise OrderRepositoryError(self._normalize_error(exc)) from exc
+
+    def delete_details_by_order_id(self, order_id: UUID) -> None:
+        """Elimina todos los detalles de un pedido."""
+
+        try:
+            self.client.table(self.details_table).delete().eq("order_id", str(order_id)).execute()
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise OrderRepositoryError(self._normalize_error(exc)) from exc
+
+    def delete_order(self, order_id: UUID) -> None:
+        """Elimina el pedido principal."""
+
+        try:
+            self.client.table(self.orders_table).delete().eq("id", str(order_id)).execute()
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise OrderRepositoryError(self._normalize_error(exc)) from exc
+
+    def _attach_details(self, order: Order) -> Order:
+        """Carga los detalles y devuelve el pedido completo."""
+
+        order.details = self.get_details_by_order_id(order.id)
+        return order
+
+    def _to_order(self, row: Mapping[str, object]) -> Order:
+        """Convierte una fila de Supabase en un pedido del dominio."""
+
+        return Order(
+            id=UUID(str(row.get("id"))),
+            user_id=UUID(str(row.get("user_id"))),
+            total=Decimal(str(row.get("total", "0"))),
+            status=OrderStatus(str(row.get("status", OrderStatus.PENDING))),
+            created_at=self._parse_datetime(row.get("created_at")),
+            updated_at=self._parse_datetime(row.get("updated_at")),
+        )
+
+    def _to_detail(self, row: Mapping[str, object]) -> OrderDetail:
+        """Convierte una fila de Supabase en un detalle de pedido."""
+
+        return OrderDetail(
+            id=UUID(str(row.get("id"))),
+            order_id=UUID(str(row.get("order_id"))),
+            product_id=UUID(str(row.get("product_id"))),
+            product_name=str(row.get("product_name", "")),
+            quantity=int(row.get("quantity", 0)),
+            unit_price=Decimal(str(row.get("unit_price", "0"))),
+            subtotal=Decimal(str(row.get("subtotal", "0"))),
+        )
+
+    def _normalize_error(self, exc: Exception) -> str:
+        """Genera un mensaje seguro y legible para la capa de servicio."""
+
+        return super()._normalize_error(exc, "Error inesperado en el repositorio de pedidos")
+</file>
+
+<file path="app/repositories/product_repository.py">
+"""Repositorio de productos usando Supabase PostgreSQL.
+
+La capa de infraestructura encapsula la tabla `products` y traduce datos crudos
+del SDK a entidades del dominio.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from decimal import Decimal
+from uuid import UUID, uuid4
+
+from app.models.product import Product, ProductStatus
+from app.repositories.base_repository import BaseRepository
+
+
+class ProductRepositoryError(Exception):
+    """Error de persistencia para productos."""
+
+
+class ProductNotFoundError(ProductRepositoryError):
+    """Señala que el producto solicitado no existe."""
+
+
+class ProductRepository(BaseRepository):
+    """Acceso a la tabla `products` de Supabase."""
+
+    table_name = "products"
+
+    def list_all(self) -> list[Product]:
+        """Lista productos ordenados por creación descendente."""
+
+        try:
+            response = self.client.table(self.table_name).select("*").order("created_at", desc=True).execute()
+            return [self._to_product(row) for row in self._extract_rows(response)]
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise ProductRepositoryError(self._normalize_error(exc)) from exc
+
+    def get_by_id(self, product_id: UUID) -> Product:
+        """Obtiene un producto por su identificador."""
+
+        try:
+            response = (
+                self.client.table(self.table_name)
+                .select("*")
+                .eq("id", str(product_id))
+                .limit(1)
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise ProductNotFoundError(f"Producto {product_id} no encontrado")
+            return self._to_product(rows[0])
+        except ProductNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise ProductRepositoryError(self._normalize_error(exc)) from exc
+
+    def create(self, payload: dict[str, object]) -> Product:
+        """Crea un producto y devuelve el registro persistido."""
+
+        try:
+            data = dict(payload)
+            data.setdefault("id", str(uuid4()))
+            data["created_at"] = datetime.now(UTC).isoformat()
+            data["updated_at"] = datetime.now(UTC).isoformat()
+
+            response = self.client.table(self.table_name).insert(data).execute()
+            rows = self._extract_rows(response)
+            if not rows:
+                raise ProductRepositoryError("Supabase no devolvió el producto creado")
+            return self._to_product(rows[0])
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise ProductRepositoryError(self._normalize_error(exc)) from exc
+
+    def update(self, product_id: UUID, payload: dict[str, object]) -> Product:
+        """Actualiza un producto existente."""
+
+        try:
+            data = dict(payload)
+            data["updated_at"] = datetime.now(UTC).isoformat()
+
+            response = (
+                self.client.table(self.table_name)
+                .update(data)
+                .select("*")
+                .eq("id", str(product_id))
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise ProductNotFoundError(f"Producto {product_id} no encontrado")
+            return self._to_product(rows[0])
+        except ProductNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise ProductRepositoryError(self._normalize_error(exc)) from exc
+
+    def delete(self, product_id: UUID) -> None:
+        """Elimina un producto por su identificador."""
+
+        try:
+            response = (
+                self.client.table(self.table_name)
+                .delete()
+                .select("*")
+                .eq("id", str(product_id))
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise ProductNotFoundError(f"Producto {product_id} no encontrado")
+        except ProductNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise ProductRepositoryError(self._normalize_error(exc)) from exc
+
+    def update_stock(self, product_id: UUID, new_stock: int) -> Product:
+        """Actualiza el stock de un producto y devuelve el registro persistido."""
+
+        try:
+            response = (
+                self.client.table(self.table_name)
+                .update({"stock": new_stock, "updated_at": datetime.now(UTC).isoformat()})
+                .select("*")
+                .eq("id", str(product_id))
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise ProductNotFoundError(f"Producto {product_id} no encontrado")
+            return self._to_product(rows[0])
+        except ProductNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise ProductRepositoryError(self._normalize_error(exc)) from exc
+
+    def _to_product(self, row: Mapping[str, object]) -> Product:
+        """Convierte una fila de Supabase en un producto de dominio."""
+
+        return Product(
+            id=UUID(str(row.get("id"))),
+            name=str(row.get("name", "")),
+            description=row.get("description") if row.get("description") is not None else None,
+            price=Decimal(str(row.get("price", "0"))),
+            stock=int(row.get("stock", 0)),
+            sku=str(row.get("sku", "")),
+            status=ProductStatus(str(row.get("status", ProductStatus.ACTIVE))),
+            created_at=self._parse_datetime(row.get("created_at")),
+            updated_at=self._parse_datetime(row.get("updated_at")),
+        )
+
+    def _normalize_error(self, exc: Exception) -> str:
+        """Genera un mensaje seguro y legible para la capa de servicio."""
+
+        return super()._normalize_error(exc, "Error inesperado en el repositorio de productos")
+</file>
+
+<file path="app/repositories/user_repository.py">
+"""Repositorio de usuarios sobre Supabase PostgreSQL.
+
+La capa de infraestructura se encarga de hablar con la tabla `users` y de
+convertir respuestas crudas del SDK en entidades de dominio limpias.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from uuid import UUID
+
+from app.models.user import User, UserRole
+from app.repositories.base_repository import BaseRepository
+
+
+class UserRepositoryError(Exception):
+    """Error de acceso a la persistencia de usuarios."""
+
+
+class UserNotFoundError(UserRepositoryError):
+    """Señala que el usuario solicitado no existe."""
+
+
+class UserRepository(BaseRepository):
+    """Acceso a la tabla `users` gestionada por Supabase PostgreSQL."""
+
+    table_name = "users"
+
+    def list_all(self) -> list[User]:
+        """Obtiene todos los usuarios ordenados por creación descendente."""
+
+        try:
+            response = self.client.table(self.table_name).select("*").order("created_at", desc=True).execute()
+            return [self._to_user(row) for row in self._extract_rows(response)]
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise UserRepositoryError(self._normalize_error(exc)) from exc
+
+    def get_by_id(self, user_id: UUID) -> User:
+        """Busca un usuario por su identificador."""
+
+        try:
+            response = (
+                self.client.table(self.table_name)
+                .select("*")
+                .eq("id", str(user_id))
+                .limit(1)
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise UserNotFoundError(f"Usuario {user_id} no encontrado")
+            return self._to_user(rows[0])
+        except UserNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise UserRepositoryError(self._normalize_error(exc)) from exc
+
+    def update(self, user_id: UUID, payload: dict[str, object]) -> User:
+        """Actualiza un usuario y devuelve la versión persistida."""
+
+        try:
+            data = dict(payload)
+            data["updated_at"] = datetime.now(UTC).isoformat()
+
+            response = (
+                self.client.table(self.table_name)
+                .update(data)
+                .eq("id", str(user_id))
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise UserNotFoundError(f"Usuario {user_id} no encontrado")
+            return self._to_user(rows[0])
+        except UserNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise UserRepositoryError(self._normalize_error(exc)) from exc
+
+    def delete(self, user_id: UUID) -> None:
+        """Elimina un usuario por su identificador."""
+
+        try:
+            response = (
+                self.client.table(self.table_name)
+                .delete()
+                .eq("id", str(user_id))
+                .execute()
+            )
+            rows = self._extract_rows(response)
+            if not rows:
+                raise UserNotFoundError(f"Usuario {user_id} no encontrado")
+        except UserNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - dependencia externa
+            raise UserRepositoryError(self._normalize_error(exc)) from exc
+
+    def _to_user(self, row: Mapping[str, object]) -> User:
+        """Convierte una fila de Supabase en una entidad de dominio."""
+
+        return User(
+            id=UUID(str(row.get("id"))),
+            name=str(row.get("name", "")),
+            email=str(row.get("email", "")),
+            role=UserRole(str(row.get("role", UserRole.CUSTOMER))),
+            is_active=bool(row.get("is_active", True)),
+            created_at=self._parse_datetime(row.get("created_at")),
+            updated_at=self._parse_datetime(row.get("updated_at")),
+        )
+
+    def _normalize_error(self, exc: Exception) -> str:
+        """Genera un mensaje seguro para la capa de servicio."""
+
+        return super()._normalize_error(exc, "Error inesperado en el repositorio de usuarios")
+</file>
+
+<file path="app/routers/__init__.py">
+"""Routers de la aplicación."""
+</file>
+
+<file path="app/routers/api.py">
+"""Agrupador principal de routers versionados."""
+
+from fastapi import APIRouter
+
+from app.routers.health import router as health_router
+
+
+api_router = APIRouter(prefix="/api/v1")
+
+# Se registran aquí todos los routers funcionales de la versión actual.
+api_router.include_router(health_router)
+</file>
+
+<file path="app/routers/auth_router.py">
+"""Router de autenticación pública."""
+
+from fastapi import APIRouter, Depends
+
+from app.dependencies.auth import get_current_user
+from app.models.auth import AuthenticatedUser
+from app.schemas.auth import AuthCredentialsRequest, AuthResponse, CurrentUserResponse
+from app.services.auth_service import AuthService, get_auth_service
+
+
+auth_router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+@auth_router.post("/register", response_model=AuthResponse)
+def register(
+    payload: AuthCredentialsRequest,
+    service: AuthService = Depends(get_auth_service),
+) -> AuthResponse:
+    """Registra un usuario en Supabase Auth."""
+
+    return service.register(payload)
+
+
+@auth_router.post("/login", response_model=AuthResponse)
+def login(
+    payload: AuthCredentialsRequest,
+    service: AuthService = Depends(get_auth_service),
+) -> AuthResponse:
+    """Autentica un usuario y devuelve el JWT emitido por el backend."""
+
+    return service.login(payload)
+
+
+@auth_router.get("/me", response_model=CurrentUserResponse)
+def me(current_user: AuthenticatedUser = Depends(get_current_user)) -> CurrentUserResponse:
+    """Devuelve el usuario autenticado a partir del JWT recibido."""
+
+    return CurrentUserResponse.model_validate(current_user)
+</file>
+
+<file path="app/routers/cart_router.py">
+"""Router público del carrito de compras."""
+
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
+
+from app.dependencies.auth import require_cart_owner_or_admin, require_customer_or_admin_user
+from app.models.auth import AuthenticatedUser
+from app.schemas.cart import CartActionResponse, CartAddItemRequest, CartViewResponse
+from app.services.cart_service import CartService, get_cart_service
+
+
+cart_router = APIRouter(prefix="/cart", tags=["Cart"])
+
+
+@cart_router.post("/add", response_model=CartViewResponse)
+def add_item(
+    payload: CartAddItemRequest,
+    current_user: AuthenticatedUser = Depends(require_customer_or_admin_user),
+    service: CartService = Depends(get_cart_service),
+) -> CartViewResponse:
+    """Agrega un producto al carrito del usuario autenticado."""
+
+    return service.add_item(current_user.id, payload)
+
+
+@cart_router.delete("/remove/{product_id}", response_model=CartViewResponse)
+def remove_item(
+    product_id: UUID,
+    current_user: AuthenticatedUser = Depends(require_customer_or_admin_user),
+    service: CartService = Depends(get_cart_service),
+) -> CartViewResponse:
+    """Elimina un producto del carrito del usuario autenticado."""
+
+    return service.remove_item(current_user.id, product_id)
+
+
+@cart_router.get("", response_model=CartViewResponse)
+def get_cart(
+    current_user: AuthenticatedUser = Depends(require_customer_or_admin_user),
+    service: CartService = Depends(get_cart_service),
+) -> CartViewResponse:
+    """Obtiene el carrito completo del usuario autenticado."""
+
+    return service.get_cart(current_user.id)
+
+
+@cart_router.get("/{user_id}", response_model=CartViewResponse)
+def get_cart_by_user(
+    user_id: UUID,
+    _current_user: AuthenticatedUser = Depends(require_cart_owner_or_admin),
+    service: CartService = Depends(get_cart_service),
+) -> CartViewResponse:
+    """Obtiene el carrito de un usuario concreto si es dueño o admin."""
+
+    return service.get_cart(user_id)
+
+
+@cart_router.delete("/clear", response_model=CartActionResponse)
+def clear_cart(
+    current_user: AuthenticatedUser = Depends(require_customer_or_admin_user),
+    service: CartService = Depends(get_cart_service),
+) -> CartActionResponse:
+    """Vacía por completo el carrito del usuario autenticado."""
+
+    return service.clear_cart(current_user.id)
+
+
+@cart_router.delete("/{user_id}/clear", response_model=CartActionResponse)
+def clear_cart_by_user(
+    user_id: UUID,
+    _current_user: AuthenticatedUser = Depends(require_cart_owner_or_admin),
+    service: CartService = Depends(get_cart_service),
+) -> CartActionResponse:
+    """Vacía el carrito de un usuario concreto si es dueño o admin."""
+
+    return service.clear_cart(user_id)
+</file>
+
+<file path="app/routers/health.py">
+"""Endpoints de salud y verificación operativa."""
+
+from fastapi import APIRouter, Depends
+
+from app.schemas.health import HealthResponse
+from app.services.health_service import HealthService, get_health_service
+
+
+router = APIRouter(prefix="/health", tags=["Health"])
+
+
+@router.get("", response_model=HealthResponse)
+def health_check(service: HealthService = Depends(get_health_service)) -> HealthResponse:
+    """Endpoint de salud desacoplado de la infraestructura real."""
+
+    return service.get_health()
+</file>
+
+<file path="app/routers/orders_router.py">
+"""Router público del módulo de pedidos."""
+
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
+
+from app.dependencies.auth import get_current_user, require_admin_user, require_order_owner_or_admin
+from app.models.auth import AuthenticatedUser
+from app.schemas.order import OrderCreateRequest, OrderItemResponse, OrderListResponse
+from app.services.order_service import OrderService, get_order_service
+
+
+orders_router = APIRouter(prefix="/orders", tags=["Orders"])
+
+
+@orders_router.post("", response_model=OrderItemResponse)
+def create_order(
+    payload: OrderCreateRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: OrderService = Depends(get_order_service),
+) -> OrderItemResponse:
+    """Crea un pedido validando stock y calculando el total automáticamente."""
+
+    return service.create_order(current_user.id, payload)
+
+
+@orders_router.get("", response_model=OrderListResponse, dependencies=[Depends(require_admin_user)])
+def list_orders(service: OrderService = Depends(get_order_service)) -> OrderListResponse:
+    """Lista los pedidos existentes con sus detalles."""
+
+    return service.list_orders()
+
+
+@orders_router.get("/{order_id}", response_model=OrderItemResponse, dependencies=[Depends(require_order_owner_or_admin)])
+def get_order(
+    order_id: UUID,
+    service: OrderService = Depends(get_order_service),
+) -> OrderItemResponse:
+    """Obtiene un pedido por su identificador si pertenece al usuario o es admin."""
+
+    return service.get_order(order_id)
+</file>
+
+<file path="app/routers/products_router.py">
+"""Router público del módulo de productos."""
+
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
+
+from app.dependencies.auth import require_admin_user
+from app.schemas.product import (
+    ProductCreateRequest,
+    ProductDeleteResponse,
+    ProductItemResponse,
+    ProductListResponse,
+    ProductUpdateRequest,
+)
+from app.services.product_service import ProductService, get_product_service
+
+
+products_router = APIRouter(prefix="/products", tags=["Products"])
+
+
+@products_router.get("", response_model=ProductListResponse)
+def list_products(service: ProductService = Depends(get_product_service)) -> ProductListResponse:
+    """Lista todos los productos almacenados en Supabase."""
+
+    return service.list_products()
+
+
+@products_router.get("/{product_id}", response_model=ProductItemResponse)
+def get_product(
+    product_id: UUID,
+    service: ProductService = Depends(get_product_service),
+) -> ProductItemResponse:
+    """Obtiene un producto por id."""
+
+    return service.get_product(product_id)
+
+
+@products_router.post("", response_model=ProductItemResponse, dependencies=[Depends(require_admin_user)])
+def create_product(
+    payload: ProductCreateRequest,
+    service: ProductService = Depends(get_product_service),
+) -> ProductItemResponse:
+    """Crea un producto nuevo."""
+
+    return service.create_product(payload)
+
+
+@products_router.put("/{product_id}", response_model=ProductItemResponse, dependencies=[Depends(require_admin_user)])
+def update_product(
+    product_id: UUID,
+    payload: ProductUpdateRequest,
+    service: ProductService = Depends(get_product_service),
+) -> ProductItemResponse:
+    """Actualiza completamente un producto existente."""
+
+    return service.update_product(product_id, payload)
+
+
+@products_router.delete("/{product_id}", response_model=ProductDeleteResponse, dependencies=[Depends(require_admin_user)])
+def delete_product(
+    product_id: UUID,
+    service: ProductService = Depends(get_product_service),
+) -> ProductDeleteResponse:
+    """Elimina un producto por id."""
+
+    return service.delete_product(product_id)
+</file>
+
+<file path="app/routers/users_router.py">
+"""Router público del módulo de usuarios."""
+
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
+
+from app.dependencies.auth import require_admin_user
+from app.schemas.user import UserDeleteResponse, UserResponse, UserUpdateRequest
+from app.services.user_service import UserService, get_user_service
+
+
+users_router = APIRouter(prefix="/users", tags=["Users"], dependencies=[Depends(require_admin_user)])
+
+
+@users_router.get("", response_model=list[UserResponse])
+def list_users(service: UserService = Depends(get_user_service)) -> list[UserResponse]:
+    """Lista todos los usuarios almacenados en Supabase PostgreSQL."""
+
+    return service.list_users()
+
+
+@users_router.get("/{user_id}", response_model=UserResponse)
+def get_user(
+    user_id: UUID,
+    service: UserService = Depends(get_user_service),
+) -> UserResponse:
+    """Obtiene un usuario por id."""
+
+    return service.get_user(user_id)
+
+
+@users_router.put("/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: UUID,
+    payload: UserUpdateRequest,
+    service: UserService = Depends(get_user_service),
+) -> UserResponse:
+    """Actualiza completamente un usuario existente."""
+
+    return service.update_user(user_id, payload)
+
+
+@users_router.delete("/{user_id}", response_model=UserDeleteResponse)
+def delete_user(
+    user_id: UUID,
+    service: UserService = Depends(get_user_service),
+) -> UserDeleteResponse:
+    """Elimina un usuario por id."""
+
+    return service.delete_user(user_id)
+</file>
+
+<file path="app/schemas/__init__.py">
+"""Esquemas Pydantic para entrada y salida de la API."""
+</file>
+
+<file path="app/schemas/auth.py">
+"""Esquemas de autenticación para la API pública."""
+
+import re
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.models.user import UserRole
+
+
+class AuthCredentialsRequest(BaseModel):
+    """Datos requeridos para registro e inicio de sesión."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        """Valida formato básico de contraseña para mantener una base segura."""
+
+        if not re.search(r"[A-Za-z]", value):
+            raise ValueError("La contraseña debe incluir al menos una letra")
+        if not re.search(r"\d", value):
+            raise ValueError("La contraseña debe incluir al menos un número")
+        return value
+
+
+class AuthTokenResponse(BaseModel):
+    """Tokens devueltos por Supabase."""
+
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    expires_in: int | None = None
+
+
+class AuthUserResponse(BaseModel):
+    """Usuario autenticado expuesto por la API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: EmailStr
+    created_at: str | None = None
+    confirmed_at: str | None = None
+
+
+class AuthResponse(BaseModel):
+    """Respuesta estándar para registro e inicio de sesión."""
+
+    message: str
+    user: AuthUserResponse
+    tokens: AuthTokenResponse | None = None
+
+
+class CurrentUserResponse(BaseModel):
+    """Usuario autenticado expuesto por el endpoint protegido."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: EmailStr
+    role: UserRole
+    claims: dict[str, object] = Field(default_factory=dict)
+</file>
+
+<file path="app/schemas/cart.py">
+"""Esquemas Pydantic para carrito de compras."""
+
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class CartAddItemRequest(BaseModel):
+    """Payload para agregar productos al carrito."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    product_id: UUID
+    quantity: int = Field(gt=0)
+
+
+class CartItemResponse(BaseModel):
+    """Representación pública de un item del carrito."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    cart_id: UUID
+    product_id: UUID
+    product_name: str
+    quantity: int
+    unit_price: Decimal
+    subtotal: Decimal
+
+
+class CartResponse(BaseModel):
+    """Representación pública del carrito."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    total_amount: Decimal
+    total_items: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    items: list[CartItemResponse]
+
+
+class CartViewResponse(BaseModel):
+    """Respuesta estructurada del carrito."""
+
+    message: str
+    data: CartResponse
+
+
+class CartActionResponse(BaseModel):
+    """Respuesta estructurada para acciones del carrito."""
+
+    message: str
+    data: CartResponse | None = None
+</file>
+
+<file path="app/schemas/health.py">
+"""Esquemas relacionados con el endpoint de salud."""
+
+from pydantic import BaseModel, ConfigDict
+
+
+class HealthResponse(BaseModel):
+    """Respuesta estándar para comprobar disponibilidad."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    status: str
+    message: str
+</file>
+
+<file path="app/schemas/order.py">
+"""Esquemas Pydantic para pedidos."""
+
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.order import OrderStatus
+
+
+class OrderItemRequest(BaseModel):
+    """Item individual solicitado dentro de un pedido."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    product_id: UUID
+    quantity: int = Field(gt=0)
+
+
+class OrderCreateRequest(BaseModel):
+    """Datos requeridos para crear un pedido."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[OrderItemRequest] = Field(min_length=1)
+
+
+class OrderDetailResponse(BaseModel):
+    """Detalle público de un pedido."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    order_id: UUID
+    product_id: UUID
+    product_name: str
+    quantity: int
+    unit_price: Decimal
+    subtotal: Decimal
+
+
+class OrderResponse(BaseModel):
+    """Contrato público de un pedido."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    total: Decimal
+    status: OrderStatus
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    details: list[OrderDetailResponse]
+
+
+class OrderListResponse(BaseModel):
+    """Respuesta estructurada para listados de pedidos."""
+
+    message: str
+    data: list[OrderResponse]
+
+
+class OrderItemResponse(BaseModel):
+    """Respuesta estructurada para un pedido individual."""
+
+    message: str
+    data: OrderResponse
+</file>
+
+<file path="app/schemas/product.py">
+"""Esquemas Pydantic para productos."""
+
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.models.product import ProductStatus
+
+
+class ProductBaseRequest(BaseModel):
+    """Datos comunes para crear y actualizar productos."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    price: Decimal = Field(gt=0)
+    stock: int = Field(ge=0)
+    sku: str = Field(min_length=3, max_length=64)
+    status: ProductStatus = Field(default=ProductStatus.ACTIVE)
+
+    @field_validator("sku")
+    @classmethod
+    def normalize_sku(cls, value: str) -> str:
+        """Normaliza el SKU para mantener consistencia en la base."""
+
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError("El SKU es obligatorio")
+        return normalized
+
+
+class ProductCreateRequest(ProductBaseRequest):
+    """Payload para crear un producto."""
+
+
+class ProductUpdateRequest(ProductBaseRequest):
+    """Payload para actualizar un producto completo."""
+
+
+class ProductResponse(BaseModel):
+    """Contrato público de un producto."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    description: str | None = None
+    price: Decimal
+    stock: int
+    sku: str
+    status: ProductStatus
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ProductDeleteResponse(BaseModel):
+    """Respuesta estándar al eliminar un producto."""
+
+    message: str
+    product_id: UUID
+
+
+class ProductListResponse(BaseModel):
+    """Respuesta estructurada para listados."""
+
+    message: str
+    data: list[ProductResponse]
+
+
+class ProductItemResponse(BaseModel):
+    """Respuesta estructurada para recursos únicos."""
+
+    message: str
+    data: ProductResponse
+</file>
+
+<file path="app/schemas/user.py">
+"""Esquemas Pydantic para el módulo de usuarios."""
+
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from app.models.user import UserRole
+
+
+class UserBaseRequest(BaseModel):
+    """Datos comunes para validaciones de usuarios."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=2, max_length=100)
+    email: EmailStr
+    role: UserRole
+
+
+class UserUpdateRequest(UserBaseRequest):
+    """Datos requeridos para un reemplazo completo vía PUT."""
+
+
+class UserResponse(BaseModel):
+    """Contrato público de usuario."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    email: EmailStr
+    role: UserRole
+    is_active: bool
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class UserDeleteResponse(BaseModel):
+    """Respuesta estándar al eliminar un usuario."""
+
+    message: str
+    user_id: UUID
+</file>
+
+<file path="app/services/__init__.py">
+"""Servicios de negocio."""
+</file>
+
+<file path="app/services/auth_service.py">
+"""Servicio de autenticación.
+
+Esta capa valida reglas de negocio de alto nivel y traduce errores de
+infraestructura a respuestas HTTP adecuadas.
+"""
+
+from __future__ import annotations
+
+from fastapi import HTTPException, status
+
+from app.config.settings import settings
+from app.models.auth import AuthSessionData
+from app.repositories.auth_repository import AuthRepository, AuthRepositoryError
+from app.schemas.auth import AuthCredentialsRequest, AuthResponse, AuthTokenResponse, AuthUserResponse
+from app.utils.jwt_handler import create_access_token
+
+
+class AuthService:
+    """Casos de uso de autenticación para Hurios Rally."""
+
+    def __init__(self, repository: AuthRepository | None = None) -> None:
+        self.repository = repository or AuthRepository()
+
+    def register(self, payload: AuthCredentialsRequest) -> AuthResponse:
+        """Registra un usuario con Supabase Auth."""
+
+        try:
+            session = self.repository.register(payload.email, payload.password)
+            return self._build_response(
+                message="Usuario registrado correctamente",
+                session=session,
+            )
+        except AuthRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+
+    def login(self, payload: AuthCredentialsRequest) -> AuthResponse:
+        """Inicia sesión y devuelve el JWT emitido por el backend."""
+
+        try:
+            session = self.repository.login(payload.email, payload.password)
+
+            backend_access_token = create_access_token(
+                data={
+                    "sub": session.user.id,
+                    "email": session.user.email,
+                    "source": "supabase-auth",
+                }
+            )
+
+            backend_session = AuthSessionData(
+                user=session.user,
+                access_token=backend_access_token,
+                refresh_token=session.refresh_token,
+                token_type="bearer",
+                expires_in=settings.access_token_expire_minutes * 60,
+            )
+
+            return self._build_response(
+                message="Autenticación exitosa",
+                session=backend_session,
+            )
+        except AuthRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(exc),
+            ) from exc
+
+    def _build_response(self, message: str, session: AuthSessionData) -> AuthResponse:
+        """Traduce el modelo de dominio a un contrato público de la API."""
+
+        user = AuthUserResponse.model_validate(session.user)
+        tokens = None
+
+        if session.access_token:
+            tokens = AuthTokenResponse(
+                access_token=session.access_token,
+                refresh_token=session.refresh_token,
+                token_type=session.token_type,
+                expires_in=session.expires_in,
+            )
+
+        return AuthResponse(message=message, user=user, tokens=tokens)
+
+
+def get_auth_service() -> AuthService:
+    """Dependency helper para FastAPI."""
+
+    return AuthService()
+</file>
+
+<file path="app/services/cart_service.py">
+"""Servicio del carrito de compras.
+
+Gestiona el cálculo de subtotales, la validación de stock y la asociación del
+carrito al usuario autenticado proveniente del JWT de Supabase.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal, ROUND_HALF_UP
+from uuid import UUID
+
+from fastapi import HTTPException, status
+
+from app.models.cart import Cart
+from app.models.product import Product
+from app.repositories.cart_repository import CartNotFoundError, CartRepository, CartRepositoryError
+from app.repositories.product_repository import ProductNotFoundError, ProductRepository, ProductRepositoryError
+from app.schemas.cart import (
+    CartActionResponse,
+    CartAddItemRequest,
+    CartItemResponse,
+    CartResponse,
+    CartViewResponse,
+)
+
+
+class CartService:
+    """Casos de uso del carrito de compras."""
+
+    def __init__(
+        self,
+        cart_repository: CartRepository | None = None,
+        product_repository: ProductRepository | None = None,
+    ) -> None:
+        self.cart_repository = cart_repository or CartRepository()
+        self.product_repository = product_repository or ProductRepository()
+
+    def add_item(self, user_id: UUID, payload: CartAddItemRequest) -> CartViewResponse:
+        """Agrega un producto al carrito del usuario autenticado."""
+
+        try:
+            cart = self.cart_repository.get_or_create_cart(user_id)
+            product = self.product_repository.get_by_id(payload.product_id)
+            existing_item = self.cart_repository.get_item_by_product_id(cart.id, product.id)
+
+            current_quantity = existing_item.quantity if existing_item else 0
+            new_quantity = current_quantity + payload.quantity
+
+            if new_quantity > product.stock:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Stock insuficiente para el producto {product.name}",
+                )
+
+            subtotal = self._money(product.price * Decimal(new_quantity))
+            item_payload = {
+                "cart_id": str(cart.id),
+                "product_id": str(product.id),
+                "product_name": product.name,
+                "quantity": new_quantity,
+                "unit_price": product.price,
+                "subtotal": subtotal,
+            }
+
+            if existing_item is None:
+                self.cart_repository.add_item(item_payload)
+            else:
+                self.cart_repository.update_item(existing_item.id, item_payload)
+
+            return self._build_view(user_id, "Producto agregado al carrito correctamente")
+        except ProductNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except (CartRepositoryError, ProductRepositoryError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def remove_item(self, user_id: UUID, product_id: UUID) -> CartViewResponse:
+        """Elimina un producto del carrito del usuario autenticado."""
+
+        try:
+            cart = self.cart_repository.get_or_create_cart(user_id)
+            self.cart_repository.delete_item_by_product_id(cart.id, product_id)
+            return self._build_view(user_id, "Producto eliminado del carrito correctamente")
+        except CartRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def get_cart(self, user_id: UUID) -> CartViewResponse:
+        """Obtiene el carrito completo del usuario autenticado."""
+
+        try:
+            cart = self.cart_repository.get_or_create_cart(user_id)
+            return CartViewResponse(
+                message="Carrito obtenido correctamente",
+                data=self._to_response(cart),
+            )
+        except CartRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def clear_cart(self, user_id: UUID) -> CartActionResponse:
+        """Vacía por completo el carrito del usuario autenticado."""
+
+        try:
+            cart = self.cart_repository.get_or_create_cart(user_id)
+            self.cart_repository.clear_cart(cart.id)
+            self.cart_repository.update_cart_totals(cart.id, Decimal("0"), 0)
+            return CartActionResponse(message="Carrito vaciado correctamente")
+        except CartRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def _build_view(self, user_id: UUID, message: str) -> CartViewResponse:
+        """Construye una vista limpia del carrito después de una mutación."""
+
+        cart = self.cart_repository.get_or_create_cart(user_id)
+        cart = self._recalculate_cart(cart)
+        return CartViewResponse(message=message, data=self._to_response(cart))
+
+    def _recalculate_cart(self, cart: Cart) -> Cart:
+        """Recalcula totales y subtotales del carrito desde los items persistidos."""
+
+        items = self.cart_repository.list_items(cart.id)
+        total_amount = sum((item.subtotal for item in items), Decimal("0"))
+        total_items = sum(item.quantity for item in items)
+        return self.cart_repository.update_cart_totals(cart.id, self._money(total_amount), total_items)
+
+    def _to_response(self, cart: Cart) -> CartResponse:
+        """Convierte el modelo de dominio a contrato público."""
+
+        return CartResponse(
+            id=cart.id,
+            user_id=cart.user_id,
+            total_amount=self._money(cart.total_amount),
+            total_items=cart.total_items,
+            created_at=cart.created_at,
+            updated_at=cart.updated_at,
+            items=[
+                CartItemResponse(
+                    id=item.id,
+                    cart_id=item.cart_id,
+                    product_id=item.product_id,
+                    product_name=item.product_name,
+                    quantity=item.quantity,
+                    unit_price=self._money(item.unit_price),
+                    subtotal=self._money(item.subtotal),
+                )
+                for item in cart.items
+            ],
+        )
+
+    def _money(self, value: Decimal) -> Decimal:
+        """Normaliza montos a dos decimales."""
+
+        return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def get_cart_service() -> CartService:
+    """Dependency helper para FastAPI."""
+
+    return CartService()
+</file>
+
+<file path="app/services/health_service.py">
+"""Servicio de ejemplo para la capa de negocio.
+
+La idea es que aquí viva la orquestación del caso de uso, sin depender
+directamente del framework web.
+"""
+
+from app.repositories.health_repository import HealthRepository
+from app.schemas.health import HealthResponse
+
+
+class HealthService:
+    """Caso de uso simple para el endpoint de salud."""
+
+    def __init__(self, repository: HealthRepository | None = None) -> None:
+        self.repository = repository or HealthRepository()
+
+    def get_health(self) -> HealthResponse:
+        """Construye la respuesta pública del health check."""
+
+        data = self.repository.get_status()
+        return HealthResponse(**data)
+
+
+def get_health_service() -> HealthService:
+    """Dependency injection helper para FastAPI."""
+
+    return HealthService()
+</file>
+
+<file path="app/services/order_service.py">
+"""Servicio de pedidos.
+
+Aquí se aplican las reglas de negocio: validación de stock, cálculo del total,
+creación del pedido y manejo compensatorio ante fallos de persistencia.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
+from uuid import UUID
+
+from fastapi import HTTPException, status
+
+from app.models.order import Order
+from app.models.product import Product
+from app.repositories.order_repository import OrderNotFoundError, OrderRepository, OrderRepositoryError
+from app.repositories.product_repository import ProductNotFoundError, ProductRepository, ProductRepositoryError
+from app.schemas.order import (
+    OrderCreateRequest,
+    OrderDetailResponse,
+    OrderItemRequest,
+    OrderItemResponse,
+    OrderListResponse,
+    OrderResponse,
+)
+
+
+@dataclass(slots=True)
+class _ValidatedLine:
+    """Representa una línea validada para el cálculo del pedido."""
+
+    product: Product
+    quantity: int
+
+
+class OrderService:
+    """Casos de uso para administrar pedidos."""
+
+    def __init__(
+        self,
+        order_repository: OrderRepository | None = None,
+        product_repository: ProductRepository | None = None,
+    ) -> None:
+        self.order_repository = order_repository or OrderRepository()
+        self.product_repository = product_repository or ProductRepository()
+
+    def list_orders(self) -> OrderListResponse:
+        """Lista pedidos con detalle."""
+
+        try:
+            orders = self.order_repository.list_all()
+            return OrderListResponse(
+                message="Pedidos obtenidos correctamente",
+                data=[self._to_response(order) for order in orders],
+            )
+        except OrderRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def get_order(self, order_id: UUID) -> OrderItemResponse:
+        """Obtiene un pedido por su identificador."""
+
+        try:
+            order = self.order_repository.get_by_id(order_id)
+            return OrderItemResponse(
+                message="Pedido obtenido correctamente",
+                data=self._to_response(order),
+            )
+        except OrderNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except OrderRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def create_order(self, current_user_id: UUID, payload: OrderCreateRequest) -> OrderItemResponse:
+        """Crea un pedido validando stock y calculando el total automáticamente."""
+
+        validated_lines = self._validate_and_group_items(payload.items)
+        stock_snapshot: dict[UUID, int] = {}
+        created_order = None
+
+        try:
+            for line in validated_lines:
+                stock_snapshot[line.product.id] = line.product.stock
+
+            order_total = self._calculate_total(validated_lines)
+            created_order = self.order_repository.create_order(
+                {
+                    "user_id": str(current_user_id),
+                    "total": order_total,
+                    "status": "pending",
+                }
+            )
+
+            detail_payload = [
+                {
+                    "order_id": str(created_order.id),
+                    "product_id": str(line.product.id),
+                    "product_name": line.product.name,
+                    "quantity": line.quantity,
+                    "unit_price": line.product.price,
+                    "subtotal": self._money(line.product.price * Decimal(line.quantity)),
+                }
+                for line in validated_lines
+            ]
+
+            details = self.order_repository.create_details(detail_payload)
+            if len(details) != len(detail_payload):
+                raise OrderRepositoryError("No se pudieron crear todos los detalles del pedido")
+
+            for line in validated_lines:
+                new_stock = line.product.stock - line.quantity
+                self.product_repository.update_stock(line.product.id, new_stock)
+
+            order = self.order_repository.get_by_id(created_order.id)
+            order.details = details
+
+            return OrderItemResponse(
+                message="Pedido creado correctamente",
+                data=self._to_response(order),
+            )
+        except (ProductNotFoundError, ProductRepositoryError) as exc:
+            self._rollback_order(created_order, stock_snapshot)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        except OrderRepositoryError as exc:
+            self._rollback_order(created_order, stock_snapshot)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+        except HTTPException:
+            self._rollback_order(created_order, stock_snapshot)
+            raise
+        except Exception as exc:  # pragma: no cover - fallback de seguridad
+            self._rollback_order(created_order, stock_snapshot)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No fue posible crear el pedido",
+            ) from exc
+
+    def _validate_and_group_items(self, items: list[OrderItemRequest]) -> list[_ValidatedLine]:
+        """Agrupa cantidades repetidas por producto y valida stock disponible."""
+
+        grouped: dict[UUID, int] = defaultdict(int)
+        for item in items:
+            grouped[item.product_id] += item.quantity
+
+        validated_lines: list[_ValidatedLine] = []
+        for product_id, quantity in grouped.items():
+            try:
+                product = self.product_repository.get_by_id(product_id)
+            except ProductNotFoundError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El producto {product_id} no existe",
+                ) from exc
+            except ProductRepositoryError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=str(exc),
+                ) from exc
+
+            if quantity > product.stock:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Stock insuficiente para el producto {product.name}",
+                )
+
+            validated_lines.append(_ValidatedLine(product=product, quantity=quantity))
+
+        return validated_lines
+
+    def _calculate_total(self, validated_lines: list[_ValidatedLine]) -> Decimal:
+        """Calcula el total del pedido con precisión monetaria."""
+
+        total = sum((line.product.price * Decimal(line.quantity) for line in validated_lines), Decimal("0"))
+        return self._money(total)
+
+    def _money(self, value: Decimal) -> Decimal:
+        """Normaliza valores monetarios a dos decimales."""
+
+        return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    def _rollback_order(self, order: Order | None, stock_snapshot: dict[UUID, int]) -> None:
+        """Revierte efectos parciales cuando alguna operación falla.
+
+        Supabase no está siendo usado aquí como transacción distribuida, así que
+        la compensación explícita evita dejar stock o pedidos a medio camino.
+        """
+
+        if order is None:
+            return
+
+        try:
+            self.order_repository.delete_details_by_order_id(order.id)
+        except Exception:
+            pass
+
+        for product_id, original_stock in stock_snapshot.items():
+            try:
+                self.product_repository.update_stock(product_id, original_stock)
+            except Exception:
+                pass
+
+        try:
+            self.order_repository.delete_order(order.id)
+        except Exception:
+            pass
+
+    def _to_response(self, order: Order) -> OrderResponse:
+        """Convierte la entidad de dominio al contrato público."""
+
+        return OrderResponse(
+            id=order.id,
+            user_id=order.user_id,
+            total=self._money(order.total),
+            status=order.status,
+            created_at=order.created_at,
+            updated_at=order.updated_at,
+            details=[
+                OrderDetailResponse(
+                    id=detail.id,
+                    order_id=detail.order_id,
+                    product_id=detail.product_id,
+                    product_name=detail.product_name,
+                    quantity=detail.quantity,
+                    unit_price=self._money(detail.unit_price),
+                    subtotal=self._money(detail.subtotal),
+                )
+                for detail in order.details
+            ],
+        )
+
+
+def get_order_service() -> OrderService:
+    """Dependency helper para FastAPI."""
+
+    return OrderService()
+</file>
+
+<file path="app/services/product_service.py">
+"""Servicio de productos.
+
+La capa de servicio valida reglas de negocio, orquesta el repositorio y traduce
+errores de infraestructura a respuestas HTTP consistentes.
+"""
+
+from uuid import UUID
+
+from fastapi import HTTPException, status
+
+from app.models.product import Product
+from app.repositories.product_repository import (
+    ProductNotFoundError,
+    ProductRepository,
+    ProductRepositoryError,
+)
+from app.schemas.product import (
+    ProductCreateRequest,
+    ProductDeleteResponse,
+    ProductItemResponse,
+    ProductListResponse,
+    ProductResponse,
+    ProductUpdateRequest,
+)
+
+
+class ProductService:
+    """Casos de uso para administrar productos."""
+
+    def __init__(self, repository: ProductRepository | None = None) -> None:
+        self.repository = repository or ProductRepository()
+
+    def list_products(self) -> ProductListResponse:
+        """Lista todos los productos con respuesta estructurada."""
+
+        try:
+            products = self.repository.list_all()
+            return ProductListResponse(
+                message="Productos obtenidos correctamente",
+                data=[self._to_response(product) for product in products],
+            )
+        except ProductRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def get_product(self, product_id: UUID) -> ProductItemResponse:
+        """Obtiene un producto por id."""
+
+        try:
+            product = self.repository.get_by_id(product_id)
+            return ProductItemResponse(
+                message="Producto obtenido correctamente",
+                data=self._to_response(product),
+            )
+        except ProductNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except ProductRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def create_product(self, payload: ProductCreateRequest) -> ProductItemResponse:
+        """Crea un producto nuevo."""
+
+        try:
+            product = self.repository.create(payload.model_dump(mode="json"))
+            return ProductItemResponse(
+                message="Producto creado correctamente",
+                data=self._to_response(product),
+            )
+        except ProductRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def update_product(self, product_id: UUID, payload: ProductUpdateRequest) -> ProductItemResponse:
+        """Actualiza completamente un producto existente."""
+
+        try:
+            product = self.repository.update(product_id, payload.model_dump(mode="json"))
+            return ProductItemResponse(
+                message="Producto actualizado correctamente",
+                data=self._to_response(product),
+            )
+        except ProductNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except ProductRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def delete_product(self, product_id: UUID) -> ProductDeleteResponse:
+        """Elimina un producto por id."""
+
+        try:
+            self.repository.delete(product_id)
+            return ProductDeleteResponse(
+                message="Producto eliminado correctamente",
+                product_id=product_id,
+            )
+        except ProductNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except ProductRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def _to_response(self, product: Product) -> ProductResponse:
+        """Convierte la entidad de dominio al contrato público."""
+
+        return ProductResponse.model_validate(product)
+
+
+def get_product_service() -> ProductService:
+    """Dependency helper para FastAPI."""
+
+    return ProductService()
+</file>
+
+<file path="app/services/user_service.py">
+"""Servicio de usuarios.
+
+Aquí viven las reglas de negocio y la traducción de excepciones de persistencia
+en respuestas HTTP coherentes para la API.
+"""
+
+from uuid import UUID
+
+from fastapi import HTTPException, status
+
+from app.models.user import User
+from app.repositories.user_repository import UserNotFoundError, UserRepository, UserRepositoryError
+from app.schemas.user import UserDeleteResponse, UserResponse, UserUpdateRequest
+
+
+class UserService:
+    """Casos de uso de usuarios para Hurios Rally."""
+
+    def __init__(self, repository: UserRepository | None = None) -> None:
+        self.repository = repository or UserRepository()
+
+    def list_users(self) -> list[UserResponse]:
+        """Devuelve todos los usuarios."""
+
+        try:
+            users = self.repository.list_all()
+            return [self._to_response(user) for user in users]
+        except UserRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def get_user(self, user_id: UUID) -> UserResponse:
+        """Obtiene un usuario por id."""
+
+        try:
+            user = self.repository.get_by_id(user_id)
+            return self._to_response(user)
+        except UserNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except UserRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def update_user(self, user_id: UUID, payload: UserUpdateRequest) -> UserResponse:
+        """Actualiza completamente un usuario existente."""
+
+        try:
+            updated_user = self.repository.update(user_id, payload.model_dump(mode="json"))
+            return self._to_response(updated_user)
+        except UserNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except UserRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def delete_user(self, user_id: UUID) -> UserDeleteResponse:
+        """Elimina un usuario por su id."""
+
+        try:
+            self.repository.delete(user_id)
+            return UserDeleteResponse(
+                message="Usuario eliminado correctamente",
+                user_id=user_id,
+            )
+        except UserNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except UserRepositoryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+    def _to_response(self, user: User) -> UserResponse:
+        """Convierte la entidad de dominio a contrato público."""
+
+        return UserResponse.model_validate(user)
+
+
+def get_user_service() -> UserService:
+    """Dependency helper para FastAPI."""
+
+    return UserService()
+</file>
+
+<file path="app/utils/__init__.py">
+"""Utilidades compartidas."""
+</file>
+
+<file path="app/utils/jwt_handler.py">
+"""Utilidades centralizadas para JWT.
+
+La emisión y validación del token se concentran aquí para que el resto de la
+aplicación solo consuma una interfaz sencilla y consistente.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jwt import ExpiredSignatureError, InvalidTokenError
+
+from app.config.settings import settings
+
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+
+def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
+    """Crea un JWT de acceso firmado con el secreto configurado."""
+
+    payload = data.copy()
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
+
+    payload.update(
+        {
+            "exp": expire,
+            "iat": now,
+            "type": "access",
+        }
+    )
+
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def decode_token(token: str) -> dict[str, Any]:
+    """Decodifica y valida la firma del JWT."""
+
+    try:
+        claims = jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+            options={"verify_aud": False},
+        )
+    except ExpiredSignatureError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El token ha expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+    except InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El token es inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    return claims
+
+
+def verify_token(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
+    """Verifica el token y valida las reclamaciones mínimas esperadas."""
+
+    claims = decode_token(token)
+
+    if claims.get("type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El token no es válido para acceso",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    subject = claims.get("sub")
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El token no contiene un sujeto válido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return claims
+</file>
+
+<file path="app/utils/logger.py">
+"""Configuración básica de logging para la aplicación.
+
+El objetivo es disponer de una base uniforme para observabilidad desde el inicio.
+"""
+
+import logging
+
+
+def configure_logging() -> None:
+    """Configura el nivel y formato del logger raíz."""
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+</file>
+
+<file path="app/__init__.py">
+"""Paquete principal de la aplicación."""
+</file>
+
+<file path="app/main.py">
+"""Punto de entrada de FastAPI.
+
+La aplicación se mantiene delgada a propósito: solo ensambla la configuración
+global y registra los routers. La lógica de negocio vive en capas inferiores.
+"""
+
+from fastapi import FastAPI
+
+from app.config.settings import settings
+from app.routers.cart_router import cart_router
+from app.routers.auth_router import auth_router
+from app.routers.api import api_router
+from app.routers.orders_router import orders_router
+from app.routers.products_router import products_router
+from app.routers.users_router import users_router
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    description=(
+        "Backend empresarial modular inspirado en Spring Boot, con capas "
+        "separadas y una base lista para escalar."
+    ),
+    debug=settings.debug,
+)
+
+
+@app.get("/", tags=["Root"])
+def root() -> dict[str, str]:
+    """Endpoint mínimo para validar que el servicio está activo."""
+
+    return {
+        "message": "API ejecutándose correctamente",
+        "version": settings.app_version,
+    }
+
+
+# El router agregado centraliza la composición de rutas de toda la API.
+app.include_router(api_router)
+
+# La autenticación se expone en rutas raíz para respetar /auth/register y /auth/login.
+app.include_router(auth_router)
+
+# Usuarios también queda expuesto en raíz para respetar GET/PUT/DELETE /users.
+app.include_router(users_router)
+
+# Productos se exponen en raíz para respetar GET/POST/PUT/DELETE /products.
+app.include_router(products_router)
+
+# Pedidos se exponen en raíz para respetar POST/GET /orders y GET /orders/{id}.
+app.include_router(orders_router)
+
+# Carrito se expone en raíz y queda asociado al usuario autenticado por JWT.
+app.include_router(cart_router)
+</file>
+
+<file path=".env.example">
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-supabase-api-key
+JWT_SECRET=change-me-in-production
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+</file>
+
+<file path=".gitignore">
+# Variables sensibles
+.env
+.env.local
+.env.*.local
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Caché y compilados de Python
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE y tooling local
+.idea/
+.vscode/
+
+# Distribución y temporales
+dist/
+build/
+*.log
+*.tmp
+
+# Secretos y credenciales
+*.key
+*.pem
+*.crt
+*.secret
+</file>
+
+<file path="README.md">
+## Backend Empresarial con FastAPI
+
+Base profesional para un backend modular en Python, organizada con una
+estructura inspirada en Spring Boot y preparada para escalar por capas.
+
+### Objetivos de la base
+
+- Separación clara entre `routers`, `services`, `repositories`, `models`, `schemas`, `config` y `utils`.
+- Punto de entrada funcional con FastAPI.
+- Integración con Supabase Auth usando JWT emitido por Supabase.
+- Estructura preparada para PostgreSQL y autenticación JWT futura.
+- Código base pensado para clean architecture y mantenimiento a largo plazo.
+
+### Estructura
+
+```text
+app/
+├── config/
+├── models/
+├── repositories/
+├── routers/
+├── schemas/
+├── services/
+└── utils/
+```
+
+### Requisitos
+
+- Python 3.11 o superior recomendado.
+- Dependencias instaladas desde `requirements.txt`.
+
+### Configuración
+
+1. Copia `.env.example` a `.env`.
+2. Completa `SUPABASE_URL` y `SUPABASE_KEY`.
+3. Configura `JWT_SECRET` con el secreto JWT del proyecto Supabase.
+
+### Instalación
+
+```bash
+pip install -r requirements.txt
+```
+
+### Ejecución
+
+```bash
+uvicorn app.main:app --reload
+```
+
+### Endpoints iniciales
+
+- `GET /` valida que la API está levantada.
+- `GET /api/v1/health` devuelve el estado del servicio.
+- `POST /auth/register` registra un usuario con Supabase Auth.
+- `POST /auth/login` autentica y devuelve el JWT emitido por Supabase.
+- `GET /users` lista usuarios desde Supabase PostgreSQL.
+- `GET /users/{id}` consulta un usuario por identificador.
+- `PUT /users/{id}` actualiza un usuario completo.
+- `DELETE /users/{id}` elimina un usuario.
+- `GET /products` lista productos desde Supabase PostgreSQL.
+- `GET /products/{id}` consulta un producto por identificador.
+- `POST /products` crea un producto nuevo.
+- `PUT /products/{id}` actualiza un producto completo.
+- `DELETE /products/{id}` elimina un producto.
+- `POST /orders` crea un pedido y calcula el total automáticamente.
+- `GET /orders` lista pedidos con sus detalles.
+- `GET /orders/{id}` consulta un pedido por identificador.
+- `POST /cart/add` agrega productos al carrito autenticado.
+- `DELETE /cart/remove/{product_id}` elimina un producto del carrito.
+- `GET /cart` obtiene el carrito completo.
+- `DELETE /cart/clear` vacía el carrito.
+
+### Notas de arquitectura
+
+- `routers` expone la API HTTP.
+- `services` contiene la lógica del negocio.
+- `repositories` abstrae el acceso a datos.
+- `models` representa el dominio.
+- `schemas` define contratos de entrada y salida.
+- `config` centraliza configuración, Supabase y seguridad.
+- `utils` concentra utilidades compartidas.
+
+### Autenticación
+
+- `app/routers/auth_router.py` expone el contrato público de autenticación.
+- `app/services/auth_service.py` maneja las reglas del caso de uso.
+- `app/repositories/auth_repository.py` encapsula las llamadas a Supabase Auth.
+- `app/config/security.py` valida JWT firmados por Supabase.
+- `app/dependencies/auth.py` resuelve el usuario autenticado y aplica roles.
+
+### Seguridad
+
+- Los tokens se validan con `JWT_SECRET_KEY` y `JWT_ALGORITHM`.
+- `401 Unauthorized` se usa para token ausente, inválido o expirado.
+- `403 Forbidden` se usa para acceso denegado por rol o ausencia de perfil interno.
+- Las rutas de administración requieren rol `admin`.
+- Las rutas de carrito y creación de pedidos requieren `admin` o `customer`.
+
+### Usuarios
+
+- `app/routers/users_router.py` expone el CRUD básico de usuarios.
+- `app/services/user_service.py` resuelve las reglas del caso de uso.
+- `app/repositories/user_repository.py` consulta la tabla `users` en Supabase PostgreSQL.
+- `app/models/user.py` define la entidad de dominio y los roles `admin` y `customer`.
+- `app/schemas/user.py` valida nombres, emails, roles y respuestas públicas.
+- Todas las rutas de usuarios requieren rol `admin`.
+
+### Productos
+
+- `app/routers/products_router.py` expone el CRUD de productos.
+- `app/services/product_service.py` maneja las reglas del caso de uso.
+- `app/repositories/product_repository.py` consulta la tabla `products` en Supabase PostgreSQL.
+- `app/models/product.py` define la entidad de dominio del producto.
+- `app/schemas/product.py` valida precio positivo, stock válido y campos requeridos.
+- Las operaciones de escritura de productos requieren rol `admin`.
+
+### Pedidos
+
+- `app/routers/orders_router.py` expone el flujo público de pedidos.
+- `app/services/order_service.py` valida stock, calcula totales y maneja compensación de fallos.
+- `app/repositories/order_repository.py` persiste pedidos y detalles en Supabase PostgreSQL.
+- `app/models/order.py` define las entidades `Order` y `OrderDetail`.
+- `app/schemas/order.py` valida usuario, productos, cantidades y estructura de respuesta.
+- La creación de pedidos usa el usuario autenticado resuelto desde el JWT.
+- La consulta de pedidos por identificador requiere ser `admin` o dueño del pedido.
+
+### Carrito
+
+- `app/routers/cart_router.py` expone el flujo público del carrito.
+- `app/services/cart_service.py` valida stock, calcula subtotales y recalcula totales.
+- `app/repositories/cart_repository.py` persiste carritos e items en Supabase PostgreSQL.
+- `app/models/cart.py` define las entidades `Cart` y `CartItem`.
+- `app/schemas/cart.py` valida cantidades y estructura respuestas limpias.
+- El carrito se asocia al usuario autenticado resuelto desde el JWT.
+- También existen rutas admin/owner para consultar o vaciar el carrito de un usuario concreto: `GET /cart/{user_id}` y `DELETE /cart/{user_id}/clear`.
+
+### Tabla esperada en Supabase
+
+El módulo asume tablas `carts` y `cart_items` con columnas similares a:
+
+- `carts.id` UUID
+- `carts.user_id` UUID
+- `carts.total_amount` numeric
+- `carts.total_items` integer
+- `carts.created_at` timestamptz
+- `carts.updated_at` timestamptz
+- `cart_items.id` UUID
+- `cart_items.cart_id` UUID
+- `cart_items.product_id` UUID
+- `cart_items.product_name` text
+- `cart_items.quantity` integer
+- `cart_items.unit_price` numeric
+- `cart_items.subtotal` numeric
+
+### Tabla esperada en Supabase
+
+El módulo asume tablas `orders` y `order_details` con columnas similares a:
+
+- `orders.id` UUID
+- `orders.user_id` UUID
+- `orders.total` numeric
+- `orders.status` text
+- `orders.created_at` timestamptz
+- `orders.updated_at` timestamptz
+- `order_details.id` UUID
+- `order_details.order_id` UUID
+- `order_details.product_id` UUID
+- `order_details.product_name` text
+- `order_details.quantity` integer
+- `order_details.unit_price` numeric
+- `order_details.subtotal` numeric
+
+### Tabla esperada en Supabase
+
+El módulo asume una tabla `products` con columnas similares a:
+
+- `id` UUID
+- `name` text
+- `description` text
+- `price` numeric
+- `stock` integer
+- `sku` text
+- `status` text
+- `created_at` timestamptz
+- `updated_at` timestamptz
+
+El módulo de usuarios mantiene su propia definición de tabla en la sección anterior.
+</file>
+
+<file path="requirements.txt">
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+python-dotenv>=1.0,<2.0
+pyjwt>=2.9,<3.0
+pydantic>=2.7,<3.0
+email-validator>=2.2,<3.0
+supabase>=2.6,<3.0
+sqlalchemy>=2.0,<3.0
+psycopg[binary]>=3.2,<4.0
+passlib[bcrypt]>=1.7,<2.0
+</file>
+
+</files>
