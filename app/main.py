@@ -13,7 +13,7 @@ from app.routers.api import api_router
 from app.routers.orders_router import orders_router
 from app.routers.products_router import products_router
 from app.routers.users_router import users_router
-
+from app.routers.storage_router import storage_router
 
 app = FastAPI(
     title=settings.app_name,
@@ -53,3 +53,5 @@ app.include_router(orders_router)
 
 # Carrito se expone en raíz y queda asociado al usuario autenticado por JWT.
 app.include_router(cart_router)
+
+app.include_router(storage_router)
